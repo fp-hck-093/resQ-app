@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
 import { User, IUser } from './models/user.model';
+import { UpdateLocationInput } from './dto/update-location.input';
 
 @Injectable()
 export class UsersService {
@@ -20,5 +21,19 @@ export class UsersService {
   ): Promise<User> {
     const result = await this.userModel.create(data);
     return result as unknown as User;
+  }
+
+  async updateLocation(
+    userId: string,
+    input: UpdateLocationInput,
+  ): Promise<User | null> {
+    await this.userModel.where('_id', userId).update({
+      currentLocation: {
+        type: 'Point',
+        coordinates: [input.longitude, input.latitude],
+      },
+      currentAddress: input.currentAddress ?? undefined,
+    });
+    return this.findById(userId);
   }
 }
