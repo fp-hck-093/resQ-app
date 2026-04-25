@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { UploadModule } from './upload/upload.module';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { RequestsModule } from './requests/requests.module';
 import { LocationsModule } from './locations/locations.module';
 
@@ -50,6 +51,7 @@ import { LocationsModule } from './locations/locations.module';
     UploadModule,
     RequestsModule,
     LocationsModule,
+    ActivityLogsModule,
   ],
   providers: [AppResolver],
 })
