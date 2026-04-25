@@ -2,7 +2,6 @@ import { Args, Float, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Request } from './models/request.model';
 import { RequestsService } from './requests.service';
 import { CreateRequestInput } from './dto/create-request.input';
-import { UpdateRequestStatusInput } from './dto/update-request-status.input';
 
 @Resolver(() => Request)
 export class RequestsResolver {
@@ -60,12 +59,14 @@ export class RequestsResolver {
   }
 
   @Mutation(() => Request)
-  async updateRequestStatus(
-    @Args('input') input: UpdateRequestStatusInput,
+  async volunteerForRequest(
+    @Args('requestId') requestId: string,
   ): Promise<Request> {
-    return this.requestsService.updateRequestStatus(
-      input.requestId,
-      input.status,
-    );
+    return this.requestsService.volunteerForRequest(requestId);
+  }
+
+  @Mutation(() => Request)
+  async completeRequest(@Args('id') id: string): Promise<Request> {
+    return this.requestsService.updateRequestStatus(id);
   }
 }

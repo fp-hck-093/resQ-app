@@ -105,27 +105,43 @@ export class RequestsService {
       throw new NotFoundException('Request not found');
     }
 
+    if (request.status !== 'pending') {
+      throw new BadRequestException('Only pending requests can be deleted');
+    }
+
     const result = await this.requestModel.destroy(id);
     return result > 0;
   }
 
-  async updateRequestStatus(
-    id: string,
-    status: 'pending' | 'in_progress' | 'completed',
-  ): Promise<Request> {
+  async volunteerForRequest(requestId: string): Promise<Request> {
+    const request = await this.requestModel.find(requestId);
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.status !== 'pending') {
+      throw new BadRequestException(
+        'Only pending requests can be volunteered for',
+      );
+    }
+
+    await request.fill({ status: 'in_progress' }).save();
+    return request;
+  }
+
+  async updateRequestStatus(id: string): Promise<Request> {
     const request = await this.requestModel.find(id);
     if (!request) {
       throw new NotFoundException('Request not found');
     }
 
-    const validStatuses = ['pending', 'in_progress', 'completed'];
-    if (!validStatuses.includes(status)) {
+    if (request.status !== 'in_progress') {
       throw new BadRequestException(
-        `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        'Only in-progress requests can be marked as completed',
       );
     }
 
-    await request.fill({ status }).save();
+    await request.fill({ status: 'completed' }).save();
     return request;
   }
 }
