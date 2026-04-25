@@ -19,6 +19,7 @@ export interface IRequest {
   address: string;
   photos?: string[];
   status: 'pending' | 'in_progress' | 'completed';
+  volunteerIds?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +64,9 @@ export class Request extends Model<IRequest> {
 
   @Field(() => String)
   status: string;
+
+  @Field(() => [String], { nullable: true })
+  volunteerIds?: string[];
 
   @Field(() => Date)
   createdAt: Date;
