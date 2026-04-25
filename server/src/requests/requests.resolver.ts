@@ -11,10 +11,13 @@ import { User } from '../users/models/user.model';
 export class RequestsResolver {
   constructor(private requestsService: RequestsService) {}
 
+  @UseGuards(JwtGuard)
   @Mutation(() => Request)
   async createRequest(
     @Args('input') input: CreateRequestInput,
+    @CurrentUser() currentUser: User,
   ): Promise<Request> {
+    input.userId = currentUser._id.toString();
     return this.requestsService.createRequest(input);
   }
 
@@ -37,6 +40,12 @@ export class RequestsResolver {
     return this.requestsService.getRequestsByUserId(userId);
   }
 
+  @UseGuards(JwtGuard)
+  @Query(() => [Request])
+  async getMyRequests(@CurrentUser() currentUser: User): Promise<Request[]> {
+    return this.requestsService.getRequestsByUserId(currentUser._id.toString());
+  }
+
   @Query(() => Request)
   async getRequestById(@Args('id') id: string): Promise<Request> {
     return this.requestsService.getRequestById(id);
@@ -57,9 +66,13 @@ export class RequestsResolver {
     );
   }
 
+  @UseGuards(JwtGuard)
   @Mutation(() => String)
-  async deleteRequest(@Args('id') id: string): Promise<string> {
-    return this.requestsService.deleteRequest(id);
+  async deleteRequest(
+    @Args('id') id: string,
+    @CurrentUser() currentUser: User,
+  ): Promise<string> {
+    return this.requestsService.deleteRequest(id, currentUser._id.toString());
   }
 
   @UseGuards(JwtGuard)
@@ -76,8 +89,15 @@ export class RequestsResolver {
     );
   }
 
+  @UseGuards(JwtGuard)
   @Mutation(() => Request)
-  async completeRequest(@Args('id') id: string): Promise<Request> {
-    return this.requestsService.updateRequestStatus(id);
+  async completeRequest(
+    @Args('id') id: string,
+    @CurrentUser() currentUser: User,
+  ): Promise<Request> {
+    return this.requestsService.updateRequestStatus(
+      id,
+      currentUser._id.toString(),
+    );
   }
 }

@@ -7,10 +7,15 @@ import { InjectModel } from '@mongoloquent/nestjs';
 import { Request } from './models/request.model';
 import { CreateRequestInput } from './dto/create-request.input';
 import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { ActivityLogStatus } from '../activity-logs/models/activity-log.model';
 
 @Injectable()
 export class RequestsService {
-  constructor(@InjectModel(Request) private requestModel: typeof Request) {}
+  constructor(
+    @InjectModel(Request) private requestModel: typeof Request,
+    private activityLogsService: ActivityLogsService,
+  ) {}
 
   async createRequest(input: CreateRequestInput): Promise<Request> {
     const validCategories = [
@@ -99,10 +104,14 @@ export class RequestsService {
     return result;
   }
 
-  async deleteRequest(id: string): Promise<string> {
+  async deleteRequest(id: string, userId: string): Promise<string> {
     const request = await this.requestModel.find(id);
     if (!request) {
       throw new NotFoundException('Request not found');
+    }
+
+    if (request.userId.toString() !== userId) {
+      throw new BadRequestException('You can only delete your own requests');
     }
 
     if (request.status !== 'pending') {
@@ -153,13 +162,19 @@ export class RequestsService {
       await request.fill({ volunteerIds: updatedIds }).save();
     }
 
+    await this.activityLogsService.create(volunteerId, requestId);
+
     return request;
   }
 
-  async updateRequestStatus(id: string): Promise<Request> {
+  async updateRequestStatus(id: string, userId: string): Promise<Request> {
     const request = await this.requestModel.find(id);
     if (!request) {
       throw new NotFoundException('Request not found');
+    }
+
+    if (request.userId.toString() !== userId) {
+      throw new BadRequestException('You can only complete your own requests');
     }
 
     if (request.status !== 'in_progress') {
@@ -169,6 +184,12 @@ export class RequestsService {
     }
 
     await request.fill({ status: 'completed' }).save();
+
+    await this.activityLogsService.updateStatusByRequest(
+      id,
+      ActivityLogStatus.COMPLETED,
+    );
+
     return request;
   }
 }
