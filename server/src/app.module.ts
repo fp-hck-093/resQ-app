@@ -7,6 +7,8 @@ import { MongoloquentModule } from '@mongoloquent/nestjs';
 import { AppResolver } from './app.resolver';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { UploadModule } from './upload/upload.module';
 import { RequestsModule } from './requests/requests.module';
 
 @Module({
@@ -43,6 +45,8 @@ import { RequestsModule } from './requests/requests.module';
     }),
     UsersModule,
     AuthModule,
+    CloudinaryModule,
+    UploadModule,
     RequestsModule,
   ],
   providers: [AppResolver],

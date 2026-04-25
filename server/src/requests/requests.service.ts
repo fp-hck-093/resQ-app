@@ -6,6 +6,7 @@ import {
 import { InjectModel } from '@mongoloquent/nestjs';
 import { Request } from './models/request.model';
 import { CreateRequestInput } from './dto/create-request.input';
+import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
 
 @Injectable()
 export class RequestsService {
@@ -40,6 +41,26 @@ export class RequestsService {
     });
 
     return result as unknown as Request;
+  }
+
+  async getNearbyRequests(
+    latitude: number,
+    longitude: number,
+    status?: string,
+    category?: string,
+  ): Promise<Request[]> {
+    let query = this.requestModel.where('location', {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [longitude, latitude] },
+        $maxDistance: NEARBY_REQUESTS_RADIUS_KM * 1000,
+      },
+    });
+
+    if (status) query = query.where('status', status);
+    if (category) query = query.where('category', category);
+
+    const results = await query.get();
+    return results as unknown as Request[];
   }
 
   async getAllRequests(): Promise<Request[]> {

@@ -1,4 +1,4 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Float, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Request } from './models/request.model';
 import { RequestsService } from './requests.service';
 import { CreateRequestInput } from './dto/create-request.input';
@@ -37,6 +37,21 @@ export class RequestsResolver {
   @Query(() => Request)
   async getRequestById(@Args('id') id: string): Promise<Request> {
     return this.requestsService.getRequestById(id);
+  }
+
+  @Query(() => [Request])
+  async getNearbyRequests(
+    @Args('latitude', { type: () => Float }) latitude: number,
+    @Args('longitude', { type: () => Float }) longitude: number,
+    @Args('status', { nullable: true }) status?: string,
+    @Args('category', { nullable: true }) category?: string,
+  ): Promise<Request[]> {
+    return this.requestsService.getNearbyRequests(
+      latitude,
+      longitude,
+      status,
+      category,
+    );
   }
 
   @Mutation(() => Boolean)
