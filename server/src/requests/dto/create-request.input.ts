@@ -1,6 +1,26 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, IsNumber, Min, Max, IsArray, IsOptional } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  Min,
+  Max,
+  IsArray,
+  IsOptional,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
+
+@InputType()
+export class LocationInput {
+  @Field(() => String)
+  @IsString()
+  @IsNotEmpty()
+  type: string;
+
+  @Field(() => [Number])
+  @IsNotEmpty()
+  coordinates: number[];
+}
 
 @InputType()
 export class CreateRequestInput {
@@ -59,16 +79,4 @@ export class CreateRequestInput {
   @IsArray()
   @IsOptional()
   photos?: string[];
-}
-
-@InputType()
-export class LocationInput {
-  @Field(() => String)
-  @IsString()
-  @IsNotEmpty()
-  type: string;
-
-  @Field(() => [Number])
-  @IsNotEmpty()
-  coordinates: number[];
 }
