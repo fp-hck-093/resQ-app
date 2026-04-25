@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { UploadModule } from './upload/upload.module';
 import { RequestsModule } from './requests/requests.module';
+import { LocationsModule } from './locations/locations.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { RequestsModule } from './requests/requests.module';
     CloudinaryModule,
     UploadModule,
     RequestsModule,
+    LocationsModule,
   ],
   providers: [AppResolver],
 })
