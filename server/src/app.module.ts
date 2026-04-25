@@ -7,6 +7,7 @@ import { MongoloquentModule } from '@mongoloquent/nestjs';
 import { AppResolver } from './app.resolver';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { RequestsModule } from './requests/requests.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AuthModule } from './auth/auth.module';
     }),
     UsersModule,
     AuthModule,
+    RequestsModule,
   ],
   providers: [AppResolver],
 })
