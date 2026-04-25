@@ -57,8 +57,8 @@ export class RequestsResolver {
     );
   }
 
-  @Mutation(() => Boolean)
-  async deleteRequest(@Args('id') id: string): Promise<boolean> {
+  @Mutation(() => String)
+  async deleteRequest(@Args('id') id: string): Promise<string> {
     return this.requestsService.deleteRequest(id);
   }
 
@@ -68,7 +68,12 @@ export class RequestsResolver {
     @Args('requestId') requestId: string,
     @CurrentUser() currentUser: User,
   ): Promise<Request> {
-    return this.requestsService.volunteerForRequest(requestId, currentUser._id);
+    const currentUserId = currentUser._id.toString();
+    return this.requestsService.volunteerForRequest(
+      requestId,
+      currentUserId,
+      currentUserId,
+    );
   }
 
   @Mutation(() => Request)
