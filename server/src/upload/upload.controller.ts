@@ -24,7 +24,10 @@ export class UploadController {
       fileFilter: (_req, file, cb) => {
         const allowed = ['image/jpeg', 'image/png', 'image/webp'];
         if (!allowed.includes(file.mimetype)) {
-          return cb(new BadRequestException('Only JPEG, PNG, WEBP allowed'), false);
+          return cb(
+            new BadRequestException('Only JPEG, PNG, WEBP allowed'),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -48,7 +51,10 @@ export class UploadController {
       fileFilter: (_req, file, cb) => {
         const allowed = ['image/jpeg', 'image/png', 'image/webp'];
         if (!allowed.includes(file.mimetype)) {
-          return cb(new BadRequestException('Only JPEG, PNG, WEBP allowed'), false);
+          return cb(
+            new BadRequestException('Only JPEG, PNG, WEBP allowed'),
+            false,
+          );
         }
         cb(null, true);
       },
