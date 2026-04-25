@@ -68,9 +68,11 @@ export class RequestsResolver {
     @Args('requestId') requestId: string,
     @CurrentUser() currentUser: User,
   ): Promise<Request> {
+    const currentUserId = currentUser._id.toString();
     return this.requestsService.volunteerForRequest(
       requestId,
-      currentUser._id.toString(),
+      currentUserId,
+      currentUserId,
     );
   }
 
