@@ -1,7 +1,11 @@
 import { Args, Float, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { UseGuards } from '@nestjs/common';
 import { Request } from './models/request.model';
 import { RequestsService } from './requests.service';
 import { CreateRequestInput } from './dto/create-request.input';
+import { JwtGuard } from '../common/guards/jwt.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { User } from '../users/models/user.model';
 
 @Resolver(() => Request)
 export class RequestsResolver {
@@ -58,11 +62,13 @@ export class RequestsResolver {
     return this.requestsService.deleteRequest(id);
   }
 
+  @UseGuards(JwtGuard)
   @Mutation(() => Request)
   async volunteerForRequest(
     @Args('requestId') requestId: string,
+    @CurrentUser() currentUser: User,
   ): Promise<Request> {
-    return this.requestsService.volunteerForRequest(requestId);
+    return this.requestsService.volunteerForRequest(requestId, currentUser._id);
   }
 
   @Mutation(() => Request)

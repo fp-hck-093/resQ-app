@@ -113,18 +113,41 @@ export class RequestsService {
     return result > 0;
   }
 
-  async volunteerForRequest(requestId: string): Promise<Request> {
+  async volunteerForRequest(
+    requestId: string,
+    volunteerId: string,
+  ): Promise<Request> {
     const request = await this.requestModel.find(requestId);
     if (!request) {
       throw new NotFoundException('Request not found');
+    }
+
+    if (String(request.userId) === String(volunteerId)) {
+      throw new BadRequestException(
+        'You cannot volunteer for your own request',
+      );
     }
 
     if (request.status === 'completed') {
       throw new BadRequestException('Cannot volunteer for a completed request');
     }
 
+    const currentIds: string[] = request.volunteerIds ?? [];
+
+    if (currentIds.includes(volunteerId)) {
+      throw new BadRequestException(
+        'You have already volunteered for this request',
+      );
+    }
+
+    const updatedIds = [...currentIds, volunteerId];
+
     if (request.status === 'pending') {
-      await request.fill({ status: 'in_progress' }).save();
+      await request
+        .fill({ status: 'in_progress', volunteerIds: updatedIds })
+        .save();
+    } else {
+      await request.fill({ volunteerIds: updatedIds }).save();
     }
 
     return request;
