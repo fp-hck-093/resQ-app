@@ -119,13 +119,14 @@ export class RequestsService {
       throw new NotFoundException('Request not found');
     }
 
-    if (request.status !== 'pending') {
-      throw new BadRequestException(
-        'Only pending requests can be volunteered for',
-      );
+    if (request.status === 'completed') {
+      throw new BadRequestException('Cannot volunteer for a completed request');
     }
 
-    await request.fill({ status: 'in_progress' }).save();
+    if (request.status === 'pending') {
+      await request.fill({ status: 'in_progress' }).save();
+    }
+
     return request;
   }
 
