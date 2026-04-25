@@ -116,7 +116,7 @@ export class RequestsService {
   async volunteerForRequest(
     requestId: string,
     userId: string,
-    volunteerId: string
+    volunteerId: string,
   ): Promise<Request> {
     const request = await this.requestModel.find(requestId);
     if (!request) {
