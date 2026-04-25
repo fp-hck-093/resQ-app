@@ -122,7 +122,7 @@ export class RequestsService {
       throw new NotFoundException('Request not found');
     }
 
-    if (request.userId === volunteerId) {
+    if (String(request.userId) === String(volunteerId)) {
       throw new BadRequestException(
         'You cannot volunteer for your own request',
       );
