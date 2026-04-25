@@ -99,7 +99,7 @@ export class RequestsService {
     return result;
   }
 
-  async deleteRequest(id: string): Promise<boolean> {
+  async deleteRequest(id: string): Promise<string> {
     const request = await this.requestModel.find(id);
     if (!request) {
       throw new NotFoundException('Request not found');
@@ -109,20 +109,21 @@ export class RequestsService {
       throw new BadRequestException('Only pending requests can be deleted');
     }
 
-    const result = await this.requestModel.destroy(id);
-    return result > 0;
+    await this.requestModel.destroy(id);
+    return 'Request has been deleted';
   }
 
   async volunteerForRequest(
     requestId: string,
-    volunteerId: string,
+    userId: string,
+    volunteerId: string
   ): Promise<Request> {
     const request = await this.requestModel.find(requestId);
     if (!request) {
       throw new NotFoundException('Request not found');
     }
 
-    if (String(request.userId) === String(volunteerId)) {
+    if (request.userId.toString() === userId) {
       throw new BadRequestException(
         'You cannot volunteer for your own request',
       );
@@ -132,7 +133,9 @@ export class RequestsService {
       throw new BadRequestException('Cannot volunteer for a completed request');
     }
 
-    const currentIds: string[] = request.volunteerIds ?? [];
+    const currentIds: string[] = (
+      (request.volunteerIds as unknown as string[]) ?? []
+    ).map(String);
 
     if (currentIds.includes(volunteerId)) {
       throw new BadRequestException(
