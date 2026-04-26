@@ -55,6 +55,10 @@ export class UsersService {
     return this.findById(userId);
   }
 
+  async updatePassword(userId: string, hashedPassword: string): Promise<void> {
+    await this.userModel.where('_id', userId).update({ password: hashedPassword });
+  }
+
   async updateLocation(
     userId: string,
     input: UpdateLocationInput,
