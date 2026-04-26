@@ -6,13 +6,15 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
-import {
-  EarthquakeAlert,
-  IEarthquakeAlert,
-} from './models/earthquake-alert.model';
+import { EarthquakeAlert } from './models/earthquake-alert.model';
+import { BmkgAlert } from './models/bmkg-alert.model';
 
 const EARTHQUAKE_URL = 'https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json';
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const BMKG_RSS_URL = 'https://www.bmkg.go.id/alerts/nowcast/en/rss.xml';
+const POLL_INTERVAL_MS = 5 * 60 * 1000;
+const NOWCAST_POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+const DANGEROUS_SEVERITIES = ['Extreme', 'Severe', 'Moderate'];
 
 interface BmkgGempa {
   Tanggal: string;
@@ -23,14 +25,53 @@ interface BmkgGempa {
   Wilayah: string;
 }
 
+function extractTag(xml: string, tag: string): string {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
+  return match ? match[1].trim() : '';
+}
+
+function extractAllTags(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'g');
+  const results: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(xml)) !== null) {
+    results.push(m[1].trim());
+  }
+  return results;
+}
+
+function computeCentroid(polygons: string[]): { lat: number; lon: number } {
+  let sumLat = 0;
+  let sumLon = 0;
+  let count = 0;
+
+  for (const poly of polygons) {
+    const pairs = poly.trim().split(/\s+/);
+    for (const pair of pairs) {
+      const [lat, lon] = pair.split(',').map(Number);
+      if (!isNaN(lat) && !isNaN(lon)) {
+        sumLat += lat;
+        sumLon += lon;
+        count++;
+      }
+    }
+  }
+
+  if (count === 0) return { lat: 0, lon: 0 };
+  return { lat: sumLat / count, lon: sumLon / count };
+}
+
 @Injectable()
 export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BmkgLogsService.name);
   private pollingTimer: NodeJS.Timeout;
+  private nowcastTimer: NodeJS.Timeout;
 
   constructor(
     @InjectModel(EarthquakeAlert)
     private earthquakeModel: typeof EarthquakeAlert,
+    @InjectModel(BmkgAlert)
+    private bmkgAlertModel: typeof BmkgAlert,
   ) {}
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -41,10 +82,26 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
       () => void this.pollEarthquake(),
       POLL_INTERVAL_MS,
     );
+
+    void this.pollNowcast();
+    this.nowcastTimer = setInterval(
+      () => void this.pollNowcast(),
+      NOWCAST_POLL_INTERVAL_MS,
+    );
   }
 
   onModuleDestroy() {
     clearInterval(this.pollingTimer);
+    clearInterval(this.nowcastTimer);
+  }
+
+  private async pollNowcast() {
+    try {
+      const results = await this.fetchAndStoreNowcastAlerts();
+      this.logger.log(`[Nowcast] synced — ${results.length} new alert(s)`);
+    } catch (err) {
+      this.logger.error('[Nowcast] sync failed', err);
+    }
   }
 
   private async pollEarthquake() {
@@ -58,7 +115,7 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // ─── Core ────────────────────────────────────────────────────────────────────
+  // ─── Earthquake ──────────────────────────────────────────────────────────────
 
   async syncEarthquakeAlert(): Promise<EarthquakeAlert> {
     const body = await this.fetchText(EARTHQUAKE_URL);
@@ -68,7 +125,6 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
     const tanggal = gempa.Tanggal;
     const jam = gempa.Jam;
 
-    // Check if this exact event is already stored
     const existing = await this.earthquakeModel
       .where('tanggal', tanggal)
       .where('jam', jam)
@@ -76,10 +132,9 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
 
     if (existing.length > 0) return existing[0] as unknown as EarthquakeAlert;
 
-    // Coordinates from BMKG: "lat,lon" (e.g. "-5.44,103.59")
     const [lat, lon] = gempa.Coordinates.split(',').map(Number);
 
-    const payload: Omit<IEarthquakeAlert, '_id' | 'createdAt' | 'updatedAt'> = {
+    const result = await this.earthquakeModel.create({
       tanggal,
       jam,
       location: { type: 'Point', coordinates: [lon, lat] },
@@ -87,9 +142,7 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
       kedalaman: gempa.Kedalaman,
       wilayah: gempa.Wilayah,
       fetchedAt: new Date(),
-    };
-
-    const result = await this.earthquakeModel.create(payload);
+    });
     return result as unknown as EarthquakeAlert;
   }
 
@@ -99,6 +152,94 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
       .limit(limit)
       .get();
     return results as unknown as EarthquakeAlert[];
+  }
+
+  // ─── Nowcast Alerts ──────────────────────────────────────────────────────────
+
+  async fetchAndStoreNowcastAlerts(): Promise<BmkgAlert[]> {
+    let rssText: string;
+    try {
+      rssText = await this.fetchText(BMKG_RSS_URL);
+    } catch (err) {
+      throw new InternalServerErrorException(
+        `Failed to fetch BMKG RSS: ${(err as Error).message}`,
+      );
+    }
+
+    const itemMatches = rssText.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
+    const stored: BmkgAlert[] = [];
+
+    for (const itemXml of itemMatches) {
+      const guid = extractTag(itemXml, 'guid');
+      const link = extractTag(itemXml, 'link');
+      const title = extractTag(itemXml, 'title');
+
+      if (!link) continue;
+
+      const existing = await this.bmkgAlertModel
+        .where('identifier', guid)
+        .first();
+      if (existing) continue;
+
+      let capXml: string;
+      try {
+        capXml = await this.fetchText(link);
+      } catch {
+        continue;
+      }
+
+      const identifier = extractTag(capXml, 'identifier') || guid;
+      const event = extractTag(capXml, 'event');
+      const urgency = extractTag(capXml, 'urgency');
+      const severity = extractTag(capXml, 'severity');
+      const certainty = extractTag(capXml, 'certainty');
+      const effective = extractTag(capXml, 'effective');
+      const expires = extractTag(capXml, 'expires');
+      const headline = extractTag(capXml, 'headline');
+      const description = extractTag(capXml, 'description');
+      const areaDesc = extractAllTags(capXml, 'areaDesc').join('; ');
+      const polygons = extractAllTags(capXml, 'polygon');
+
+      const { lat, lon } = computeCentroid(polygons);
+      const isDangerous = DANGEROUS_SEVERITIES.includes(severity);
+
+      const result = await this.bmkgAlertModel.create({
+        identifier,
+        title: headline || title,
+        event,
+        urgency,
+        severity,
+        certainty,
+        areaDesc,
+        description,
+        effective,
+        expires,
+        location: { type: 'Point', coordinates: [lon, lat] },
+        alertUrl: link,
+        isDangerous,
+        fetchedAt: new Date(),
+      });
+
+      stored.push(result as unknown as BmkgAlert);
+    }
+
+    return stored;
+  }
+
+  async getNowcastAlerts(): Promise<BmkgAlert[]> {
+    const results = await this.bmkgAlertModel
+      .orderBy('fetchedAt', 'desc')
+      .get();
+    return results as unknown as BmkgAlert[];
+  }
+
+  async getActiveNowcastAlerts(): Promise<BmkgAlert[]> {
+    const now = new Date().toISOString();
+    const all = await this.bmkgAlertModel.orderBy('fetchedAt', 'desc').get();
+    return (all as unknown as BmkgAlert[]).filter((alert) => {
+      if (!alert.expires) return true;
+      return alert.expires > now;
+    });
   }
 
   // ─── Helper ──────────────────────────────────────────────────────────────────
