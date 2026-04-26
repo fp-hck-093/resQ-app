@@ -13,6 +13,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { RequestsModule } from './requests/requests.module';
 import { LocationsModule } from './locations/locations.module';
 import { WeatherModule } from './weather/weather.module';
+import { BmkgModule } from './bmkg/bmkg.module';
 import { BmkgLogsModule } from './bmkg-logs/bmkg-logs.module';
 
 @Module({
@@ -55,6 +56,7 @@ import { BmkgLogsModule } from './bmkg-logs/bmkg-logs.module';
     LocationsModule,
     ActivityLogsModule,
     WeatherModule,
+    BmkgModule,
     BmkgLogsModule,
   ],
   providers: [AppResolver],

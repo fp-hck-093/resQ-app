@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
 import { ConfigService } from '@nestjs/config';
-import { WeatherLog, IWeatherAlert } from './models/weather-log.model';
+import { WeatherLog } from './models/weather-log.model';
 
 const DANGEROUS_PRECIP_MM = 20;
 const DANGEROUS_WIND_KPH = 60;
@@ -15,14 +15,6 @@ interface WeatherApiResponse {
     precip_mm: number;
     humidity: number;
     vis_km: number;
-  };
-  alerts: {
-    alert: Array<{
-      headline: string;
-      event: string;
-      severity: string;
-      desc: string;
-    }>;
   };
 }
 
@@ -38,7 +30,7 @@ export class WeatherService {
     longitude: number,
   ): Promise<WeatherLog> {
     const apiKey = this.configService.get<string>('WEATHER_API_KEY');
-    const url = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${latitude},${longitude}&alerts=yes`;
+    const url = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${latitude},${longitude}`;
 
     let data: WeatherApiResponse;
     try {
@@ -53,18 +45,10 @@ export class WeatherService {
       );
     }
 
-    const alerts: IWeatherAlert[] = (data.alerts?.alert ?? []).map((a) => ({
-      headline: a.headline,
-      event: a.event,
-      severity: a.severity,
-      desc: a.desc,
-    }));
-
     const isDangerous =
       data.current.precip_mm >= DANGEROUS_PRECIP_MM ||
       data.current.wind_kph >= DANGEROUS_WIND_KPH ||
-      data.current.vis_km < DANGEROUS_VISIBILITY_KM ||
-      alerts.length > 0;
+      data.current.vis_km < DANGEROUS_VISIBILITY_KM;
 
     const result = await this.weatherLogModel.create({
       city: data.location.name,
@@ -75,7 +59,6 @@ export class WeatherService {
       precipMm: data.current.precip_mm,
       humidity: data.current.humidity,
       visibilityKm: data.current.vis_km,
-      alerts,
       isDangerous,
       fetchedAt: new Date(),
     });
