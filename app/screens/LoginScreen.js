@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Alert,
+  Animated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
 import * as SecureStore from 'expo-secure-store';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const LOGIN_MUTATION = gql`
   mutation Login($input: LoginInput!) {
@@ -35,17 +37,34 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState('');
+
+  const floatA = useRef(new Animated.Value(0)).current;
+  const floatB = useRef(new Animated.Value(0)).current;
+  const floatC = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const makeLoop = (anim, delay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, { toValue: -10, duration: 1400, delay, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: 1400, useNativeDriver: true }),
+        ]),
+      );
+    makeLoop(floatA, 0).start();
+    makeLoop(floatB, 500).start();
+    makeLoop(floatC, 900).start();
+  }, []);
 
   const [login, { loading }] = useMutation(LOGIN_MUTATION, {
     onCompleted: async (data) => {
       if (data.login.token) {
         await SecureStore.setItemAsync('access_token', data.login.token);
       }
-      Alert.alert('Berhasil', `Selamat datang, ${data.login.user.name}!`);
       navigation.replace('Home');
     },
     onError: (error) => {
-      Alert.alert('Login gagal', error.message);
+      setApiError(error.message);
     },
   });
 
@@ -67,100 +86,159 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.decorTop} />
-      <View style={styles.decorSmall} />
-      <View style={styles.decorBottom} />
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandRow}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoText}>R</Text>
+          {/* Blue header with logo */}
+          <View style={styles.header}>
+            <Animated.View style={[styles.floatingBtn, styles.floatingBtnTopLeft, { transform: [{ translateY: floatA }] }]}>
+              <Ionicons name="heart-outline" size={18} color="#fff" />
+            </Animated.View>
+            <Animated.View style={[styles.floatingBtn, styles.floatingBtnBottomLeft, { transform: [{ translateY: floatB }] }]}>
+              <Ionicons name="people-outline" size={18} color="#fff" />
+            </Animated.View>
+            <Animated.View style={[styles.floatingBtn, styles.floatingBtnRight, { transform: [{ translateY: floatC }] }]}>
+              <Ionicons name="shield-checkmark-outline" size={18} color="#fff" />
+            </Animated.View>
+
+            <View style={styles.logoCard}>
+              <Image source={require('../assets/ResQ2.png')} style={styles.logoImage} />
+              <Text style={styles.logoCardTitle}>ResQ</Text>
+              <Text style={styles.logoCardSubtitle}>CONNECTING HELP{'\n'}When It Matters Most</Text>
             </View>
-            <Text style={styles.brandText}>resQ</Text>
           </View>
 
-          <View style={styles.heading}>
-            <Text style={styles.title}>Masuk</Text>
-            <Text style={styles.subtitle}>Kelola bantuan dan pantau request darurat di sekitarmu.</Text>
-          </View>
+          {/* Form section */}
+          <View style={styles.formSection}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Sign in to continue helping your community</Text>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[
-                styles.input,
-                focusedField === 'email' && styles.inputFocused,
-                errors.email && styles.inputError,
-              ]}
-              placeholder="nama@email.com"
-              placeholderTextColor="#7c8daa"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField(null)}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
-              }}
-            />
-            {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+            {apiError ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.errorBannerText}>{apiError}</Text>
+              </View>
+            ) : null}
 
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordWrap}>
-              <TextInput
+            <View style={styles.form}>
+              <Text style={styles.label}>Email Address</Text>
+              <View
                 style={[
-                  styles.input,
-                  styles.passwordInput,
-                  focusedField === 'password' && styles.inputFocused,
-                  errors.password && styles.inputError,
+                  styles.inputWrap,
+                  focusedField === 'email' && styles.inputWrapFocused,
+                  errors.email && styles.inputWrapError,
                 ]}
-                placeholder="Password"
-                placeholderTextColor="#7c8daa"
-                secureTextEntry={!showPassword}
-                value={password}
-                onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
-                }}
-              />
-              <Pressable style={styles.passwordToggle} onPress={() => setShowPassword((current) => !current)}>
-                <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+              >
+                <MaterialIcons name="email" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="your.email@example.com"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (errors.email) setErrors((curr) => ({ ...curr, email: undefined }));
+                    if (apiError) setApiError('');
+                  }}
+                />
+              </View>
+              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+
+              <Text style={styles.label}>Password</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'password' && styles.inputWrapFocused,
+                  errors.password && styles.inputWrapError,
+                ]}
+              >
+                <MaterialIcons name="lock" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (errors.password) setErrors((curr) => ({ ...curr, password: undefined }));
+                  }}
+                />
+                <Pressable onPress={() => setShowPassword((curr) => !curr)} style={styles.eyeBtn}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </Pressable>
+              </View>
+              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+
+              <Pressable
+                style={styles.forgotRow}
+                onPress={() => navigation.navigate('ForgotPassword')}
+              >
+                <Text style={styles.forgotText}>Forgot Password?</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.buttonPressed,
+                  loading && styles.buttonDisabled,
+                ]}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {loading ? 'Signing in...' : 'Sign In  →'}
+                </Text>
+              </Pressable>
+
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>Or continue with</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Pressable style={styles.socialBtn}>
+                  <Text style={styles.socialBtnText}>G  Google</Text>
+                </Pressable>
+                <Pressable style={styles.socialBtn}>
+                  <Text style={styles.socialBtnText}>f  Facebook</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account?</Text>
+              <Pressable onPress={() => navigation.replace('Register')}>
+                <Text style={styles.footerLink}> Sign Up</Text>
               </Pressable>
             </View>
-            {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.buttonPressed,
-                loading && styles.buttonDisabled,
-              ]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              <Text style={styles.primaryButtonText}>{loading ? 'Memproses...' : 'Masuk'}</Text>
-            </Pressable>
-
-            <Pressable style={styles.forgotButton} onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={styles.forgotText}>Lupa password?</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Belum punya akun?</Text>
-            <Pressable onPress={() => navigation.replace('Register')}>
-              <Text style={styles.footerLink}> Daftar</Text>
-            </Pressable>
+            <View style={styles.emergencyBox}>
+              <Ionicons name="alert-circle-outline" size={18} color="#d97706" style={styles.emergencyIcon} />
+              <View style={styles.emergencyContent}>
+                <Text style={styles.emergencyTitle}>Emergency?</Text>
+                <Text style={styles.emergencyText}>
+                  You can browse requests without login, but sign in to submit or accept requests.
+                </Text>
+              </View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -169,175 +247,179 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safeArea: { flex: 1, backgroundColor: '#3b5fca' },
+  keyboardAvoid: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+
+  // Header
+  header: {
+    backgroundColor: '#3b5fca',
+    height: 190,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  floatingBtn: {
+    position: 'absolute',
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingBtnTopLeft: { top: 16, left: 20 },
+  floatingBtnBottomLeft: { bottom: 20, left: 22 },
+  floatingBtnRight: { top: 44, right: 20 },
+  logoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+    gap: 4,
+  },
+  logoImage: { width: 72, height: 72, resizeMode: 'contain' },
+  logoCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginTop: 2,
+  },
+  logoCardSubtitle: {
+    fontSize: 8,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 12,
+    fontWeight: '500',
+  },
+
+  // Form section
+  formSection: {
     flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  decorTop: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: '#dbeafe',
-    top: -110,
-    right: -90,
-  },
-  decorSmall: {
-    position: 'absolute',
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    backgroundColor: '#eff6ff',
-    top: 112,
-    left: -28,
-  },
-  decorBottom: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: '#e8f1ff',
-    bottom: -120,
-    left: -70,
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    paddingTop: 34,
-    paddingBottom: 26,
-    justifyContent: 'center',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 40,
-  },
-  logoBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#dbeafe',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: '#2f5d95',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  brandText: {
-    color: '#1c304a',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  heading: {
-    marginBottom: 32,
+    paddingTop: 18,
+    paddingBottom: 14,
   },
   title: {
-    color: '#17263b',
-    fontSize: 42,
+    fontSize: 24,
     fontWeight: '800',
-    lineHeight: 48,
+    color: '#0f172a',
+    marginBottom: 2,
   },
   subtitle: {
-    color: '#607089',
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 12,
+  },
+  form: { gap: 2 },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 46,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+  },
+  inputWrapFocused: { borderColor: '#3b5fca', backgroundColor: '#fff' },
+  inputWrapError: { borderColor: '#ef4444' },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, fontSize: 14, color: '#0f172a' },
+  eyeBtn: { padding: 4 },
+  errorText: { color: '#ef4444', fontSize: 11, marginTop: 2 },
+  forgotRow: { alignItems: 'flex-end', marginTop: 4 },
+  forgotText: { color: '#3b5fca', fontSize: 13, fontWeight: '700' },
+  primaryButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#3b5fca',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 10,
   },
-  form: {
-    gap: 8,
+  buttonPressed: { opacity: 0.88 },
+  buttonDisabled: { opacity: 0.65 },
+  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+
+  // Divider
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 2,
+    gap: 10,
   },
-  label: {
-    color: '#33465f',
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  input: {
-    height: 56,
-    backgroundColor: '#f8fbff',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    color: '#18283c',
-    fontSize: 16,
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e2e8f0' },
+  dividerText: { fontSize: 12, color: '#94a3b8' },
+
+  // Social
+  socialRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  socialBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#dce8f8',
-  },
-  inputFocused: {
-    borderColor: '#7aa5dc',
-    backgroundColor: '#ffffff',
-  },
-  inputError: {
-    borderColor: '#e98585',
-  },
-  errorText: {
-    color: '#c24141',
-    fontSize: 12,
-  },
-  passwordWrap: {
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  passwordInput: {
-    paddingRight: 76,
-  },
-  passwordToggle: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-  },
-  passwordToggleText: {
-    color: '#527db2',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  primaryButton: {
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#3f7fca',
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 18,
+    backgroundColor: '#fff',
   },
-  buttonPressed: {
-    opacity: 0.88,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  forgotButton: {
-    alignItems: 'center',
-    paddingTop: 18,
-  },
-  forgotText: {
-    color: '#527db2',
-    fontSize: 14,
-    fontWeight: '800',
-  },
+  socialBtnText: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+
+  // Footer
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 36,
+    marginTop: 14,
   },
-  footerText: {
-    color: '#607089',
-    fontSize: 14,
+  footerText: { color: '#64748b', fontSize: 13 },
+  footerLink: { color: '#3b5fca', fontSize: 13, fontWeight: '800' },
+
+  // Emergency
+  emergencyBox: {
+    flexDirection: 'row',
+    backgroundColor: '#fffbeb',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    padding: 10,
+    marginTop: 12,
+    gap: 8,
   },
-  footerLink: {
-    color: '#2f5d95',
-    fontSize: 14,
-    fontWeight: '800',
+  emergencyIcon: { marginTop: 1 },
+  emergencyContent: { flex: 1 },
+  emergencyTitle: { fontSize: 12, fontWeight: '800', color: '#92400e', marginBottom: 1 },
+  emergencyText: { fontSize: 11, color: '#78350f', lineHeight: 16 },
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
   },
+  errorBannerText: { flex: 1, fontSize: 13, color: '#dc2626' },
 });
