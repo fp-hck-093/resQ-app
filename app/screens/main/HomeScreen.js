@@ -90,12 +90,10 @@ export default function HomeScreen({ navigation }) {
   const [userLocation, setUserLocation] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [filterRadius, setFilterRadius] = useState("5km");
-  const [showDangerZones, setShowDangerZones] = useState(false);
 
   const {
     data: requestsData,
-    loading: requestsLoading,
+
     refetch,
   } = useQuery(GET_ALL_REQUESTS, { pollInterval: 30000 });
   const { data: bmkgData } = useQuery(GET_BMKG_ALERTS, {
@@ -177,7 +175,6 @@ export default function HomeScreen({ navigation }) {
   const requests = requestsData?.getAllRequests || [];
   const bmkgAlerts = bmkgData?.getActiveBmkgAlerts || [];
   const earthquakes = earthquakeData?.getEarthquakeAlerts || [];
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
   const dangerousAlerts = bmkgAlerts.filter((a) => a.isDangerous);
   const latestEarthquake = earthquakes[0];
   const allAlerts = [
@@ -245,7 +242,6 @@ export default function HomeScreen({ navigation }) {
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
-        showsUserLocation
         showsMyLocationButton={false}
         zoomEnabled
         scrollEnabled
@@ -254,13 +250,21 @@ export default function HomeScreen({ navigation }) {
         {renderMarkers()}
 
         {userLocation && (
-          <Circle
-            center={userLocation}
-            radius={3000}
-            fillColor="rgba(59, 95, 202, 0.06)"
-            strokeColor="rgba(59, 95, 202, 0.2)"
-            strokeWidth={1}
-          />
+          <>
+            <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 1 }}>
+              <View style={styles.userPinWrapper}>
+                <View style={styles.userPinHead} />
+                <View style={styles.userPinTail} />
+              </View>
+            </Marker>
+            <Circle
+              center={userLocation}
+              radius={3000}
+              fillColor="rgba(59, 95, 202, 0.06)"
+              strokeColor="rgba(59, 95, 202, 0.2)"
+              strokeWidth={1}
+            />
+          </>
         )}
       </MapView>
 
@@ -275,16 +279,7 @@ export default function HomeScreen({ navigation }) {
             />
             <Text style={styles.logoText}>ResQ</Text>
           </View>
-          <View style={styles.headerCenter}>
-            <View style={styles.activeChip}>
-              <Ionicons name="flash" size={12} color="#3b5fca" />
-              <Text style={styles.activeChipText}>{pendingCount} Active</Text>
-            </View>
-            <View style={styles.locationChip}>
-              <Ionicons name="location" size={12} color="#22c55e" />
-              <Text style={styles.locationChipText}>Jakarta</Text>
-            </View>
-          </View>
+
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.notifBtn}>
               <Ionicons name="notifications" size={20} color="#0f172a" />
@@ -299,85 +294,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* FILTER BAR */}
-        <View style={styles.filterBar}>
-          <TouchableOpacity style={styles.filterBtn}>
-            <Ionicons name="options-outline" size={14} color="#0f172a" />
-            <Text style={styles.filterBtnText}>Filters</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              filterRadius === "5km" && styles.filterChipActive,
-            ]}
-            onPress={() => setFilterRadius("5km")}
-          >
-            <Ionicons
-              name="people-outline"
-              size={13}
-              color={filterRadius === "5km" ? "#fff" : "#0f172a"}
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                filterRadius === "5km" && styles.filterChipTextActive,
-              ]}
-            >
-              5km
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              showDangerZones && styles.filterChipDanger,
-            ]}
-            onPress={() => setShowDangerZones(!showDangerZones)}
-          >
-            <Ionicons
-              name="layers-outline"
-              size={13}
-              color={showDangerZones ? "#fff" : "#0f172a"}
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                showDangerZones && styles.filterChipTextActive,
-              ]}
-            >
-              Danger Zones
-            </Text>
-          </TouchableOpacity>
-        </View>
       </SafeAreaView>
 
-      {/* ── LIVE UPDATES CARD (kanan atas) ── */}
-      <View style={styles.liveUpdatesCard}>
-        <LinearGradient
-          colors={["#1e3a8a", "#3b5fca"]}
-          style={styles.liveUpdatesGradient}
-        >
-          <View style={styles.liveUpdatesHeader}>
-            <Ionicons name="flash" size={12} color="#fbbf24" />
-            <Text style={styles.liveUpdatesTitle}>Live Updates</Text>
-          </View>
-          {requestsLoading ? (
-            <ActivityIndicator
-              size="small"
-              color="#fff"
-              style={{ marginVertical: 8 }}
-            />
-          ) : (
-            <>
-              <Text style={styles.liveUpdatesCount}>{pendingCount}</Text>
-              <Text style={styles.liveUpdatesLabel}>Active Requests</Text>
-              <View style={styles.liveUpdatesLocation}>
-                <Ionicons name="location" size={10} color="#93c5fd" />
-                <Text style={styles.liveUpdatesLocationText}>Jakarta Area</Text>
-              </View>
-            </>
-          )}
-        </LinearGradient>
-      </View>
 
       {/* ── MAP CONTROLS (kanan bawah) ── */}
       <View style={styles.mapControls}>
@@ -616,27 +534,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0f172a",
   },
-  headerCenter: { flexDirection: "row", gap: 6, alignItems: "center" },
-  activeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#eff6ff",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  activeChipText: { fontSize: 11, fontWeight: "700", color: "#3b5fca" },
-  locationChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#f0fdf4",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  locationChipText: { fontSize: 11, fontWeight: "700", color: "#22c55e" },
+
   headerRight: { flex: 1, alignItems: "flex-end" },
   notifBtn: { position: "relative", padding: 4 },
   notifBadge: {
@@ -652,98 +550,6 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: { fontSize: 9, fontWeight: "800", color: "#fff" },
 
-  // Filter Bar
-  filterBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  filterBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  filterBtnText: { fontSize: 12, fontWeight: "600", color: "#0f172a" },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  filterChipActive: { backgroundColor: "#3b5fca", borderColor: "#3b5fca" },
-  filterChipDanger: { backgroundColor: "#ef4444", borderColor: "#ef4444" },
-  filterChipText: { fontSize: 12, fontWeight: "600", color: "#0f172a" },
-  filterChipTextActive: { color: "#fff" },
-
-  // Live Updates Card
-  liveUpdatesCard: {
-    position: "absolute",
-    top: 160,
-    right: 16,
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#1e3a8a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 5,
-  },
-  liveUpdatesGradient: {
-    padding: 14,
-    width: 130,
-    alignItems: "center",
-  },
-  liveUpdatesHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 4,
-  },
-  liveUpdatesTitle: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#fbbf24",
-    letterSpacing: 0.5,
-  },
-  liveUpdatesCount: { fontSize: 36, fontWeight: "800", color: "#fff" },
-  liveUpdatesLabel: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.8)",
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  liveUpdatesLocation: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 6,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  liveUpdatesLocationText: {
-    fontSize: 10,
-    color: "#93c5fd",
-    fontWeight: "600",
-  },
 
   // Map Controls
   mapControls: {
