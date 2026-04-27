@@ -1,6 +1,6 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
 import { Model } from 'mongoloquent';
-import { GeoPoint } from '../../common/types/geo-point.type';
+import { GeoPolygon } from '../../common/types/geo-polygon.type';
 
 export interface IBmkgAlert {
   _id?: string;
@@ -14,7 +14,7 @@ export interface IBmkgAlert {
   description: string;
   effective: string;
   expires: string;
-  location: { type: string; coordinates: number[] };
+  location: { type: string; coordinates: number[][][][] };
   alertUrl: string;
   isDangerous: boolean;
   fetchedAt: Date;
@@ -60,8 +60,8 @@ export class BmkgAlert extends Model<IBmkgAlert> {
   @Field(() => String)
   expires: string;
 
-  @Field(() => GeoPoint)
-  location: GeoPoint;
+  @Field(() => GeoPolygon)
+  location: GeoPolygon;
 
   @Field(() => String)
   alertUrl: string;
