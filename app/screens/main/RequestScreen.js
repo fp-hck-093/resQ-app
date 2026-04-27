@@ -19,30 +19,27 @@ const GET_ALL_REQUESTS = gql`
   query GetAllRequests {
     getAllRequests {
       _id
-      userId
-      userName
-      userPhone
       category
       description
+      status
+      address
       numberOfPeople
       urgencyScore
-      address
-      status
-      volunteerIds
+      userName
+      createdAt
       location {
         type
         coordinates
       }
-      createdAt
     }
   }
 `;
 
-const CREATE_REQUEST = gql`
-  mutation CreateRequest($input: CreateRequestInput!) {
-    createRequest(input: $input) {
+const GET_MY_ACTIVITIES = gql`
+  query GetMyActivities {
+    getMyActivities {
       _id
-      description
+      requestId
       status
     }
   }
@@ -142,7 +139,6 @@ export default function RequestsScreen() {
         },
       },
     });
-  };
 
   const renderRequest = ({ item }) => (
     <TouchableOpacity
@@ -177,6 +173,18 @@ export default function RequestsScreen() {
             >
               {item.status?.replace("_", " ")}
             </Text>
+            <View
+              style={[
+                styles.urgencyBadge,
+                { backgroundColor: urgencyConfig.color + "20" },
+              ]}
+            >
+              <Text
+                style={[styles.urgencyText, { color: urgencyConfig.color }]}
+              >
+                {urgencyConfig.label}
+              </Text>
+            </View>
           </View>
         </View>
         <Text style={styles.requestDesc} numberOfLines={2}>
@@ -195,17 +203,56 @@ export default function RequestsScreen() {
               {item.numberOfPeople} orang
             </Text>
           </View>
-          <View style={styles.requestMetaItem}>
-            <Ionicons name="person-outline" size={12} color="#94a3b8" />
-            <Text style={styles.requestMetaText}>{item.userName}</Text>
+
+          <View style={styles.requestCardBottom}>
+            <View
+              style={[
+                styles.statusChip,
+                { backgroundColor: isAccepted ? "#f0fdf4" : "#fef9f0" },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: isAccepted ? "#22c55e" : "#f97316" },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusChipText,
+                  { color: isAccepted ? "#22c55e" : "#f97316" },
+                ]}
+              >
+                {item.status?.replace("_", " ")}
+              </Text>
+            </View>
+
+            {!isAccepted && (
+              <TouchableOpacity
+                style={styles.acceptBtn}
+                onPress={() =>
+                  volunteerForRequest({ variables: { requestId: item._id } })
+                }
+                disabled={volunteerLoading}
+              >
+                <LinearGradient
+                  colors={["#3b5fca", "#5b7ee5"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.acceptBtnGradient}
+                >
+                  <Text style={styles.acceptBtnText}>Accept</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       {/* HEADER */}
       <View style={styles.header}>
         <View>
@@ -214,15 +261,12 @@ export default function RequestsScreen() {
             {filtered.length} request aktif
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setShowCreateModal(true)}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
+        <TouchableOpacity style={styles.filterIconBtn}>
+          <Ionicons name="options-outline" size={18} color="#3b5fca" />
         </TouchableOpacity>
       </View>
 
-      {/* CATEGORY FILTER */}
+      {/* FILTER TABS */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -261,8 +305,13 @@ export default function RequestsScreen() {
           data={filtered}
           keyExtractor={(item) => item._id}
           renderItem={renderRequest}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: activeTaskRequest ? 120 : 16 },
+          ]}
           showsVerticalScrollIndicator={false}
+          onRefresh={refetch}
+          refreshing={loading}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons
@@ -276,12 +325,67 @@ export default function RequestsScreen() {
         />
       )}
 
+      {/* ACTIVE TASK BAR */}
+      {activeTaskRequest && (
+        <View style={styles.activeTaskBar}>
+          <LinearGradient
+            colors={["#1e3a8a", "#3b5fca"]}
+            style={styles.activeTaskGradient}
+          >
+            <View style={styles.activeTaskLeft}>
+              <View style={styles.activeTaskIconWrap}>
+                <Text style={styles.activeTaskEmoji}>
+                  {CATEGORY_CONFIG[activeTaskRequest.category]?.emoji || "🆘"}
+                </Text>
+              </View>
+              <View>
+                <View style={styles.activeTaskBadge}>
+                  <Ionicons name="flash" size={10} color="#fbbf24" />
+                  <Text style={styles.activeTaskBadgeText}>ACTIVE TASK</Text>
+                </View>
+                <Text style={styles.activeTaskTitle} numberOfLines={1}>
+                  {activeTaskRequest.category} assistance delivery
+                </Text>
+                <Text style={styles.activeTaskSub}>
+                  In Progress • 2.5km away
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.viewTaskBtn}>
+              <Text style={styles.viewTaskBtnText}>View{"\n"}Task</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      )}
+
       {/* DETAIL MODAL */}
       <Modal visible={!!selectedRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedRequest?.category}</Text>
+              <View
+                style={[
+                  styles.modalCategoryWrap,
+                  {
+                    backgroundColor:
+                      CATEGORY_CONFIG[selectedRequest?.category]?.bg ||
+                      "#f9fafb",
+                  },
+                ]}
+              >
+                <Text style={styles.modalEmoji}>
+                  {CATEGORY_CONFIG[selectedRequest?.category]?.emoji || "❓"}
+                </Text>
+              </View>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>
+                  {selectedRequest?.category}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedRequest?.userName}
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setSelectedRequest(null)}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
@@ -346,14 +450,23 @@ export default function RequestsScreen() {
                 }
                 disabled={volunteerLoading}
               >
-                {volunteerLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="hand-left" size={20} color="#fff" />
-                    <Text style={styles.volunteerBtnText}>Saya Mau Bantu</Text>
-                  </>
-                )}
+                <LinearGradient
+                  colors={["#3b5fca", "#5b7ee5"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.modalVolunteerBtnGradient}
+                >
+                  {volunteerLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="hand-left" size={20} color="#fff" />
+                      <Text style={styles.modalVolunteerBtnText}>
+                        Saya Mau Bantu!
+                      </Text>
+                    </>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             )}
           </View>
@@ -483,14 +596,16 @@ const styles = StyleSheet.create({
   addBtn: {
     backgroundColor: "#3b5fca",
     borderRadius: 12,
-    padding: 8,
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Filter
   filterScroll: { maxHeight: 52, backgroundColor: "#fff" },
   filterContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  filterChip: {
-    paddingHorizontal: 14,
+  filterTab: {
+    paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: "#f1f5f9",
@@ -667,7 +782,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 14,
     gap: 8,
-    marginTop: 16,
   },
   submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
