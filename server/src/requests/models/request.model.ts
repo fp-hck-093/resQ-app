@@ -1,11 +1,12 @@
 // server/src/requests/models/request.model.ts
 import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
 
 export interface IRequest {
   _id?: string;
-  userId: string;
+  userId: ObjectId;
   userName: string;
   userPhone: string;
   category: 'Rescue' | 'Shelter' | 'Food' | 'Medical' | 'Money/Item';

@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
+import { ObjectId } from 'mongodb';
 import { ActivityLog, ActivityLogStatus } from './models/activity-log.model';
 
 @Injectable()
@@ -14,8 +15,8 @@ export class ActivityLogsService {
 
   async create(volunteerId: string, requestId: string): Promise<ActivityLog> {
     const result = await this.activityLogModel.create({
-      volunteerId,
-      requestId,
+      volunteerId: new ObjectId(volunteerId),
+      requestId: new ObjectId(requestId),
       status: ActivityLogStatus.ACTIVE,
     });
     return result as unknown as ActivityLog;
@@ -26,9 +27,12 @@ export class ActivityLogsService {
     requestId: string,
     status: ActivityLogStatus,
   ): Promise<ActivityLog> {
+    const vId = new ObjectId(volunteerId);
+    const rId = new ObjectId(requestId);
+
     const exists = await this.activityLogModel
-      .where('volunteerId', volunteerId)
-      .where('requestId', requestId)
+      .where('volunteerId', vId)
+      .where('requestId', rId)
       .first();
 
     if (!exists) {
@@ -50,13 +54,13 @@ export class ActivityLogsService {
     }
 
     await this.activityLogModel
-      .where('volunteerId', volunteerId)
-      .where('requestId', requestId)
+      .where('volunteerId', vId)
+      .where('requestId', rId)
       .update({ status });
 
     const updated = await this.activityLogModel
-      .where('volunteerId', volunteerId)
-      .where('requestId', requestId)
+      .where('volunteerId', vId)
+      .where('requestId', rId)
       .first();
 
     return updated as unknown as ActivityLog;
@@ -64,7 +68,7 @@ export class ActivityLogsService {
 
   async findByVolunteer(volunteerId: string): Promise<ActivityLog[]> {
     const result = await this.activityLogModel
-      .where('volunteerId', volunteerId)
+      .where('volunteerId', new ObjectId(volunteerId))
       .get();
     return result as unknown as ActivityLog[];
   }
@@ -74,13 +78,13 @@ export class ActivityLogsService {
     status: ActivityLogStatus,
   ): Promise<void> {
     await this.activityLogModel
-      .where('requestId', requestId)
+      .where('requestId', new ObjectId(requestId))
       .update({ status });
   }
 
   async findByRequest(requestId: string): Promise<ActivityLog[]> {
     const result = await this.activityLogModel
-      .where('requestId', requestId)
+      .where('requestId', new ObjectId(requestId))
       .get();
     return result as unknown as ActivityLog[];
   }

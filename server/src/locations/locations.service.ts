@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
+import { ObjectId } from 'mongodb';
 import { UserLocation, IUserLocation } from './models/locations.model';
 import { CreateLocationInput } from './dto/create-location.input';
 import { UpdateLocationInput } from './dto/update-location.input';
@@ -20,7 +21,7 @@ export class LocationsService {
     input: CreateLocationInput,
   ): Promise<UserLocation> {
     const payload: Omit<IUserLocation, '_id' | 'createdAt' | 'updatedAt'> = {
-      userId,
+      userId: new ObjectId(userId),
       location: { type: 'Point', coordinates: input.coordinates },
       address: input.address,
       city: input.city,
@@ -38,7 +39,7 @@ export class LocationsService {
 
   async getMyLocations(userId: string): Promise<UserLocation[]> {
     const results = await this.locationModel
-      .where('userId', userId)
+      .where('userId', new ObjectId(userId))
       .orderBy('createdAt', 'desc')
       .get();
     return results as unknown as UserLocation[];
