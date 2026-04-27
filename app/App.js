@@ -10,7 +10,10 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import client from "./config/apollo";
@@ -32,8 +35,13 @@ import CreateScreen from "./screens/main/CreateScreen";
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+const serverHost = (process.env.EXPO_PUBLIC_SERVER_URI ?? "")
+  .replace("/graphql", "")
+  .replace(/:3000$/, ":8081/--")
+  .replace("http://", "exp://");
+
 const linking = {
-  prefixes: ["resq://", "exp://10.87.2.218:8081/--", "exp://10.0.2.2:8081/--", "exp://localhost:8081/--"],
+  prefixes: ["resq://", serverHost, "exp://localhost:8081/--"].filter(Boolean),
   config: {
     screens: {
       ResetPassword: {
