@@ -1,7 +1,8 @@
-import { Resolver, Mutation, Args, Query } from '@nestjs/graphql';
+import { Resolver, Mutation, Args, Query, Int } from '@nestjs/graphql';
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './models/user.model';
+import { PaginatedUsers } from './dto/paginated-users.output';
 import { UpdateLocationInput } from './dto/update-location.input';
 import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordInput } from './dto/change-password.input';
@@ -16,6 +17,16 @@ export class UsersResolver {
   @Query(() => [User])
   async getUsers(): Promise<User[]> {
     return this.usersService.findAll();
+  }
+
+  @UseGuards(JwtGuard)
+  @Query(() => PaginatedUsers)
+  async searchUsers(
+    @Args('name') name: string,
+    @Args('page', { type: () => Int, defaultValue: 1 }) page: number,
+    @Args('limit', { type: () => Int, defaultValue: 10 }) limit: number,
+  ): Promise<PaginatedUsers> {
+    return this.usersService.searchUsers(name, page, limit);
   }
 
   @UseGuards(JwtGuard)
