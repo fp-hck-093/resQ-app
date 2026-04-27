@@ -269,7 +269,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Image
-              source={require("../../assets/ResQ.png")}
+              source={require("../../assets/ResQ2.png")}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -604,16 +604,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 18,
+    paddingBottom: 12,
     backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  headerLeft: { flex: 1 },
-  logo: { width: 70, height: 28 },
+  headerLeft: { flex: 1, flexDirection: "row", alignItems: "center" },
+  logo: { width: 30, height: 30 },
+  logoText: {
+    marginLeft: -4,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0f172a",
+  },
   headerCenter: { flexDirection: "row", gap: 6, alignItems: "center" },
   activeChip: {
     flexDirection: "row",
