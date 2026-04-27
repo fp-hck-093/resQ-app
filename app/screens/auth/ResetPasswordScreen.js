@@ -15,22 +15,26 @@ import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-const FORGOT_PASSWORD_MUTATION = gql`
-  mutation ForgotPassword($input: ForgotPasswordInput!) {
-    forgotPassword(input: $input)
+const RESET_PASSWORD_MUTATION = gql`
+  mutation ResetPassword($input: ResetPasswordInput!) {
+    resetPassword(input: $input)
   }
 `;
 
-export default function ForgotPasswordScreen({ navigation }) {
-  const [email, setEmail] = useState('');
+export default function ResetPasswordScreen({ route, navigation }) {
+  const { token, id } = route.params ?? {};
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState('');
-  const [sent, setSent] = useState(false);
 
-  const [forgotPassword, { loading }] = useMutation(FORGOT_PASSWORD_MUTATION, {
+  const [resetPassword, { loading }] = useMutation(RESET_PASSWORD_MUTATION, {
     onCompleted: () => {
-      setSent(true);
+      navigation.replace('Login');
     },
     onError: (error) => {
       setApiError(error.message);
@@ -39,17 +43,22 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   const validate = () => {
     const nextErrors = {};
-    if (!email.trim()) nextErrors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      nextErrors.email = 'Invalid email format';
+    if (!newPassword) nextErrors.newPassword = 'New password is required';
+    else if (newPassword.length < 6) nextErrors.newPassword = 'Minimum 6 characters';
+    if (!confirmPassword) nextErrors.confirmPassword = 'Please confirm your password';
+    else if (newPassword !== confirmPassword) nextErrors.confirmPassword = 'Passwords do not match';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const handleSubmit = () => {
+    if (!token || !id) {
+      setApiError('This reset link is invalid. Please request a new one.');
+      return;
+    }
     if (!validate()) return;
-    void forgotPassword({
-      variables: { input: { email: email.trim().toLowerCase() } },
+    void resetPassword({
+      variables: { input: { id, token, newPassword } },
     });
   };
 
@@ -66,13 +75,8 @@ export default function ForgotPasswordScreen({ navigation }) {
         >
           {/* Blue header */}
           <View style={styles.header}>
-            <Pressable style={styles.backBtn} onPress={() => navigation.replace('Login')}>
-              <Ionicons name="arrow-back" size={18} color="#fff" />
-              <Text style={styles.backBtnText}>Back to Login</Text>
-            </Pressable>
-
             <View style={styles.logoCard}>
-              <Image source={require('../assets/ResQ2.png')} style={styles.logoImage} />
+              <Image source={require('../../assets/ResQ2.png')} style={styles.logoImage} />
               <Text style={styles.logoCardTitle}>ResQ</Text>
             </View>
           </View>
@@ -80,25 +84,13 @@ export default function ForgotPasswordScreen({ navigation }) {
           {/* Form section */}
           <View style={styles.formSection}>
             <View style={styles.iconCircle}>
-              <MaterialIcons name="lock-reset" size={28} color="#3b5fca" />
+              <MaterialIcons name="lock" size={28} color="#3b5fca" />
             </View>
 
-            <Text style={styles.title}>Forgot Password?</Text>
+            <Text style={styles.title}>Create New Password</Text>
             <Text style={styles.subtitle}>
-              Enter your email address and we'll send you a link to reset your password.
+              Your new password must be different from your previous password.
             </Text>
-
-            {sent ? (
-              <View style={styles.successBanner}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#16a34a" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.successBannerTitle}>Email Sent!</Text>
-                  <Text style={styles.successBannerText}>
-                    Check your inbox or spam folder for the reset link.
-                  </Text>
-                </View>
-              </View>
-            ) : null}
 
             {apiError ? (
               <View style={styles.errorBanner}>
@@ -108,31 +100,72 @@ export default function ForgotPasswordScreen({ navigation }) {
             ) : null}
 
             <View style={styles.form}>
-              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.label}>New Password</Text>
               <View
                 style={[
                   styles.inputWrap,
-                  focusedField === 'email' && styles.inputWrapFocused,
-                  errors.email && styles.inputWrapError,
+                  focusedField === 'new' && styles.inputWrapFocused,
+                  errors.newPassword && styles.inputWrapError,
                 ]}
               >
-                <MaterialIcons name="email" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <MaterialIcons name="lock-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="your.email@example.com"
+                  placeholder="Minimum 6 characters"
                   placeholderTextColor="#94a3b8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onFocus={() => setFocusedField('email')}
+                  secureTextEntry={!showNew}
+                  value={newPassword}
+                  onFocus={() => setFocusedField('new')}
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(text) => {
-                    setEmail(text);
-                    if (errors.email) setErrors((curr) => ({ ...curr, email: undefined }));
+                    setNewPassword(text);
+                    if (errors.newPassword) setErrors((curr) => ({ ...curr, newPassword: undefined }));
                   }}
                 />
+                <Pressable onPress={() => setShowNew((curr) => !curr)} style={styles.eyeBtn}>
+                  <Ionicons
+                    name={showNew ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </Pressable>
               </View>
-              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+              {errors.newPassword ? <Text style={styles.errorText}>{errors.newPassword}</Text> : null}
+
+              <Text style={styles.label}>Confirm New Password</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'confirm' && styles.inputWrapFocused,
+                  errors.confirmPassword && styles.inputWrapError,
+                ]}
+              >
+                <MaterialIcons name="lock-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Re-enter your new password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showConfirm}
+                  value={confirmPassword}
+                  onFocus={() => setFocusedField('confirm')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (errors.confirmPassword)
+                      setErrors((curr) => ({ ...curr, confirmPassword: undefined }));
+                  }}
+                />
+                <Pressable onPress={() => setShowConfirm((curr) => !curr)} style={styles.eyeBtn}>
+                  <Ionicons
+                    name={showConfirm ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </Pressable>
+              </View>
+              {errors.confirmPassword ? (
+                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+              ) : null}
 
               <Pressable
                 style={({ pressed }) => [
@@ -144,15 +177,16 @@ export default function ForgotPasswordScreen({ navigation }) {
                 disabled={loading}
               >
                 <Text style={styles.primaryButtonText}>
-                  {loading ? 'Sending...' : 'Send Reset Link'}
+                  {loading ? 'Resetting...' : 'Reset Password'}
                 </Text>
               </Pressable>
             </View>
 
-            <View style={styles.infoBox}>
-              <Ionicons name="information-circle-outline" size={16} color="#3b5fca" style={styles.infoIcon} />
-              <Text style={styles.infoText}>
-                The reset link is valid for <Text style={styles.infoBold}>15 minutes</Text>. Check your spam folder if you don't see it.
+            <View style={styles.secureBox}>
+              <Ionicons name="shield-checkmark-outline" size={16} color="#16a34a" style={styles.secureIcon} />
+              <Text style={styles.secureText}>
+                <Text style={styles.secureBold}>Secure: </Text>
+                Your new password is encrypted and stored safely.
               </Text>
             </View>
 
@@ -176,22 +210,13 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: '#3b5fca',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 28,
+    paddingVertical: 28,
     alignItems: 'center',
-    gap: 16,
+    justifyContent: 'center',
   },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-  },
-  backBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   logoCard: {
-    width: 110,
-    height: 110,
+    width: 120,
+    height: 120,
     backgroundColor: '#fff',
     borderRadius: 22,
     alignItems: 'center',
@@ -203,7 +228,7 @@ const styles = StyleSheet.create({
     elevation: 10,
     gap: 4,
   },
-  logoImage: { width: 70, height: 70, resizeMode: 'contain' },
+  logoImage: { width: 80, height: 80, resizeMode: 'contain' },
   logoCardTitle: { fontSize: 16, fontWeight: '800', color: '#1e293b' },
 
   formSection: {
@@ -228,7 +253,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#64748b', lineHeight: 20, marginBottom: 24 },
 
   form: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '700', color: '#1e293b', marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '700', color: '#1e293b', marginBottom: 6, marginTop: 4 },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -243,6 +268,7 @@ const styles = StyleSheet.create({
   inputWrapError: { borderColor: '#ef4444' },
   inputIcon: { marginRight: 10 },
   input: { flex: 1, fontSize: 15, color: '#0f172a' },
+  eyeBtn: { padding: 4 },
   errorText: { color: '#ef4444', fontSize: 12 },
 
   primaryButton: {
@@ -251,49 +277,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#3b5fca',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 16,
   },
   buttonPressed: { opacity: 0.88 },
   buttonDisabled: { opacity: 0.65 },
   primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 
-  infoBox: {
+  secureBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#f0fdf4',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: '#bbf7d0',
     padding: 12,
     marginTop: 20,
     gap: 8,
   },
-  infoIcon: { marginTop: 1 },
-  infoText: { flex: 1, fontSize: 12, color: '#1e40af', lineHeight: 18 },
-  infoBold: { fontWeight: '700' },
+  secureIcon: { marginTop: 1 },
+  secureText: { flex: 1, fontSize: 12, color: '#166534', lineHeight: 18 },
+  secureBold: { fontWeight: '700' },
 
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 28,
+    marginTop: 20,
   },
   footerText: { color: '#64748b', fontSize: 14 },
   footerLink: { color: '#3b5fca', fontSize: 14, fontWeight: '800' },
-
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  successBannerTitle: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
-  successBannerText: { fontSize: 12, color: '#166534', marginTop: 2 },
 
   errorBanner: {
     flexDirection: 'row',
