@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
@@ -106,22 +107,24 @@ export default function HomeScreen({ navigation }) {
     ).start();
   }, []);
 
-  // Get user location on mount
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const position = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = position.coords;
-      setUserLocation({ latitude, longitude });
-      mapRef.current?.animateToRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 1000);
-    })();
-  }, []);
+  // Get user location every time screen is focused (including after login)
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const position = await Location.getCurrentPositionAsync({});
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ latitude, longitude });
+        mapRef.current?.animateToRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      })();
+    }, []),
+  );
 
   // Animate selected request card
   useEffect(() => {
@@ -198,7 +201,7 @@ export default function HomeScreen({ navigation }) {
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
-        showsUserLocation={false}
+        showsUserLocation
         showsMyLocationButton={false}
         zoomEnabled
         scrollEnabled
@@ -206,34 +209,14 @@ export default function HomeScreen({ navigation }) {
       >
         {renderMarkers()}
 
-        {/* Custom You Are Here Marker */}
         {userLocation && (
-          <>
-            <Marker
-              coordinate={userLocation}
-              anchor={{ x: 0.5, y: 1 }}
-            >
-              <View style={styles.youAreHereContainer}>
-                <View style={styles.youAreHereLabel}>
-                  <Text style={styles.youAreHereText}>📍 You are here</Text>
-                </View>
-                <View style={styles.youAreHerePulseWrap}>
-                  <Animated.View style={[
-                    styles.youAreHerePulse,
-                    { transform: [{ scale: pulseAnim }] }
-                  ]} />
-                  <View style={styles.youAreHereDot} />
-                </View>
-              </View>
-            </Marker>
-            <Circle
-              center={userLocation}
-              radius={3000}
-              fillColor="rgba(59, 95, 202, 0.06)"
-              strokeColor="rgba(59, 95, 202, 0.2)"
-              strokeWidth={1}
-            />
-          </>
+          <Circle
+            center={userLocation}
+            radius={3000}
+            fillColor="rgba(59, 95, 202, 0.06)"
+            strokeColor="rgba(59, 95, 202, 0.2)"
+            strokeWidth={1}
+          />
         )}
       </MapView>
 
@@ -324,41 +307,7 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ── ALERT BAR ── */}
-      {allAlerts.length > 0 && (
-        <View style={styles.alertBar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {allAlerts.map((alert) => (
-              <View key={alert.id} style={[styles.alertBarItem, { backgroundColor: alert.color + '15' }]}>
-                <Ionicons name={alert.icon} size={12} color={alert.color} />
-                <Text style={[styles.alertBarText, { color: alert.color }]} numberOfLines={1}>
-                  {alert.text}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
 
-      {/* ── MAP LEGEND (kiri bawah) ── */}
-      <View style={styles.mapLegend}>
-        <View style={styles.mapLegendHeader}>
-          <Ionicons name="layers" size={13} color="#0f172a" />
-          <Text style={styles.mapLegendTitle}>Map Legend</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-          <Text style={styles.legendText}>Critical Zone</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#f97316' }]} />
-          <Text style={styles.legendText}>Watch Zone</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#22c55e' }]} />
-          <Text style={styles.legendText}>Safe Zone</Text>
-        </View>
-      </View>
 
       {/* ── SELECTED REQUEST CARD ── */}
       {selectedRequest && (

@@ -29,7 +29,8 @@
         "googleMaps": {
           "apiKey": "AIzaSyDedWZ3Ap3t7Z7pxd0BleURAgvMSzwEoqU"
         }
-      }
+      },
+      "package": "com.erwindw99.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
