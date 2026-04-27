@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { ApolloProvider } from "@apollo/client/react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -6,6 +7,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as SecureStore from "expo-secure-store";
 import { TouchableOpacity, View, StyleSheet } from "react-native";
 
 import client from "./config/apollo";
@@ -121,12 +123,30 @@ function MainTabs() {
 }
 
 export default function App() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    SecureStore.getItemAsync("access_token").then((token) => {
+      setIsLoggedIn(!!token);
+      setIsLoading(false);
+    });
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#3b5fca" }}>
+        <ActivityIndicator size="large" color="#ffffff" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <ApolloProvider client={client}>
         <NavigationContainer linking={linking}>
           <Stack.Navigator
-            initialRouteName="Register"
+            initialRouteName={isLoggedIn ? "Home" : "Login"}
             screenOptions={{ headerShown: false }}
           >
             <Stack.Screen name="Register" component={RegisterScreen} />
