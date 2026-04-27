@@ -14,6 +14,7 @@ import { RequestsModule } from './requests/requests.module';
 import { LocationsModule } from './locations/locations.module';
 import { WeatherModule } from './weather/weather.module';
 import { BmkgLogsModule } from './bmkg-logs/bmkg-logs.module';
+import { DangerZonesModule } from './danger-zones/danger-zones.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { BmkgLogsModule } from './bmkg-logs/bmkg-logs.module';
     ActivityLogsModule,
     WeatherModule,
     BmkgLogsModule,
+    DangerZonesModule,
   ],
   providers: [AppResolver],
 })

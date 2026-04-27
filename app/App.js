@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
+import { TouchableOpacity, View, StyleSheet } from "react-native";
 
 import client from "./config/apollo";
 
@@ -19,9 +20,11 @@ import ResetPasswordScreen from "./screens/auth/ResetPasswordScreen";
 
 // Main Screens
 import HomeScreen from "./screens/main/HomeScreen";
-import RequestsScreen from "./screens/main/RequestsScreen";
+import RequestsScreen from "./screens/main/RequestScreen";
 import ActivityScreen from "./screens/main/ActivityScreen";
 import ProfileScreen from "./screens/main/ProfileScreen";
+import LocationsScreen from "./screens/main/LocationsScreen";
+import CreateScreen from "./screens/main/CreateScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -38,12 +41,23 @@ const linking = {
   },
 };
 
+// Custom Create Button
+function CustomCreateButton({ onPress }) {
+  return (
+    <TouchableOpacity style={styles.createBtn} onPress={onPress}>
+      <View style={styles.createBtnInner}>
+        <Ionicons name="add" size={28} color="#fff" />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: "#3B5BDB",
+        tabBarActiveTintColor: "#3b5fca",
         tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: {
           backgroundColor: "#ffffff",
@@ -54,15 +68,17 @@ function MainTabs() {
           height: 65,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: "600",
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if (route.name === "Home") {
+          if (route.name === "MapTab") {
             iconName = focused ? "map" : "map-outline";
           } else if (route.name === "Requests") {
-            iconName = focused ? "alert-circle" : "alert-circle-outline";
+            iconName = focused ? "list" : "list-outline";
+          } else if (route.name === "Locations") {
+            iconName = focused ? "location" : "location-outline";
           } else if (route.name === "Activity") {
             iconName = focused ? "clipboard" : "clipboard-outline";
           } else if (route.name === "Profile") {
@@ -72,10 +88,36 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: "Map" }} />
-      <Tab.Screen name="Requests" component={RequestsScreen} options={{ tabBarLabel: "Requests" }} />
-      <Tab.Screen name="Activity" component={ActivityScreen} options={{ tabBarLabel: "Activity" }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: "Profile" }} />
+      <Tab.Screen
+        name="MapTab"
+        component={HomeScreen}
+        options={{ tabBarLabel: "Map" }}
+      />
+      <Tab.Screen
+        name="Requests"
+        component={RequestsScreen}
+        options={{ tabBarLabel: "Requests" }}
+      />
+      <Tab.Screen
+        name="Create"
+        component={CreateScreen}
+        options={{
+          tabBarLabel: "",
+          tabBarButton: (props) => (
+            <CustomCreateButton onPress={props.onPress} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Locations"
+        component={LocationsScreen}
+        options={{ tabBarLabel: "Locations" }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarLabel: "Profile" }}
+      />
     </Tab.Navigator>
   );
 }
@@ -114,8 +156,29 @@ export default function App() {
             <Stack.Screen name="Home" component={MainTabs} />
           </Stack.Navigator>
         </NavigationContainer>
-        <StatusBar style="light" />
+        <StatusBar style="auto" />
       </ApolloProvider>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  createBtn: {
+    top: -20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  createBtnInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#ef4444",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});
