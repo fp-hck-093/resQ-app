@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const REGISTER_MUTATION = gql`
   mutation Register($input: RegisterInput!) {
@@ -28,30 +28,32 @@ export default function RegisterScreen({ navigation }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
   const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState('');
 
   const [register, { loading }] = useMutation(REGISTER_MUTATION, {
-    onCompleted: (data) => {
-      Alert.alert('Berhasil', data.register || 'Akun berhasil dibuat!', [
-        { text: 'Login Sekarang', onPress: () => navigation.replace('Login') },
-      ]);
+    onCompleted: () => {
+      navigation.replace('Login');
     },
     onError: (error) => {
-      Alert.alert('Gagal', error.message);
+      setApiError(error.message);
     },
   });
 
   const validate = () => {
     const newErrors = {};
-    if (!name.trim()) newErrors.name = 'Nama wajib diisi';
-    if (!email.trim()) newErrors.email = 'Email wajib diisi';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Format email tidak valid';
-    if (!phone.trim()) newErrors.phone = 'Nomor HP wajib diisi';
-    else if (!/^\d{8,15}$/.test(phone.replace(/[\s+-]/g, ''))) newErrors.phone = 'Nomor HP tidak valid';
-    if (!password) newErrors.password = 'Password wajib diisi';
-    else if (password.length < 5) newErrors.password = 'Password minimal 5 karakter';
-    if (!confirmPassword) newErrors.confirmPassword = 'Konfirmasi password wajib diisi';
-    else if (password !== confirmPassword) newErrors.confirmPassword = 'Password tidak cocok';
+    if (!name.trim()) newErrors.name = 'Full name is required';
+    if (!email.trim()) newErrors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Invalid email format';
+    if (!phone.trim()) newErrors.phone = 'Phone number is required';
+    else if (!/^\d{8,15}$/.test(phone.replace(/[\s+-]/g, ''))) newErrors.phone = 'Invalid phone number';
+    if (!password) newErrors.password = 'Password is required';
+    else if (password.length < 8) newErrors.password = 'Minimum 8 characters';
+    if (!confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
+    else if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
+    if (!agreedToTerms) newErrors.terms = 'You must agree to the Terms of Service';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -72,129 +74,235 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.decorTop} />
-      <View style={styles.decorSmall} />
-      <View style={styles.decorBottom} />
+      {/* Top nav bar */}
+      <View style={styles.navBar}>
+        <Pressable style={styles.backBtn} onPress={() => navigation.replace('Login')}>
+          <Ionicons name="arrow-back" size={16} color="#fff" />
+          <Text style={styles.backBtnText}>Back to Login</Text>
+        </Pressable>
+      </View>
+
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandRow}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoText}>R</Text>
-            </View>
-            <Text style={styles.brandText}>resQ</Text>
-          </View>
+          <View style={styles.formSection}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Fill in your details to get started</Text>
 
-          <View style={styles.heading}>
-            <Text style={styles.title}>Daftar</Text>
-            <Text style={styles.subtitle}>Buat akun untuk meminta bantuan atau menjadi relawan saat dibutuhkan.</Text>
-          </View>
+            {apiError ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.errorBannerText}>{apiError}</Text>
+              </View>
+            ) : null}
 
-          <View style={styles.form}>
-            <TextInput
-              style={[styles.input, errors.name && styles.inputError]}
-              placeholder="Nama lengkap"
-              placeholderTextColor="#7c8daa"
-              value={name}
-              onChangeText={(text) => {
-                setName(text);
-                if (errors.name) setErrors((current) => ({ ...current, name: undefined }));
-              }}
-            />
-            {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
-
-            <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              placeholder="Email"
-              placeholderTextColor="#7c8daa"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
-              }}
-            />
-            {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
-
-            <TextInput
-              style={[styles.input, errors.phone && styles.inputError]}
-              placeholder="Nomor HP"
-              placeholderTextColor="#7c8daa"
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={(text) => {
-                setPhone(text);
-                if (errors.phone) setErrors((current) => ({ ...current, phone: undefined }));
-              }}
-            />
-            {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
-
-            <View style={styles.passwordWrap}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, errors.password && styles.inputError]}
-                placeholder="Password"
-                placeholderTextColor="#7c8daa"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
-                }}
-              />
-              <Pressable style={styles.passwordToggle} onPress={() => setShowPassword((current) => !current)}>
-                <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-              </Pressable>
-            </View>
-            {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
-
-            <View style={styles.passwordWrap}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, errors.confirmPassword && styles.inputError]}
-                placeholder="Konfirmasi password"
-                placeholderTextColor="#7c8daa"
-                secureTextEntry={!showConfirmPassword}
-                value={confirmPassword}
-                onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  if (errors.confirmPassword) {
-                    setErrors((current) => ({ ...current, confirmPassword: undefined }));
-                  }
-                }}
-              />
-              <Pressable
-                style={styles.passwordToggle}
-                onPress={() => setShowConfirmPassword((current) => !current)}
+            <View style={styles.form}>
+              {/* Full Name */}
+              <Text style={styles.label}>Full Name</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'name' && styles.inputWrapFocused,
+                  errors.name && styles.inputWrapError,
+                ]}
               >
-                <Text style={styles.passwordToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                <Ionicons name="person-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="John Doe"
+                  placeholderTextColor="#94a3b8"
+                  value={name}
+                  onFocus={() => setFocusedField('name')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setName(text);
+                    if (errors.name) setErrors((curr) => ({ ...curr, name: undefined }));
+                  }}
+                />
+              </View>
+              {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
+
+              {/* Email */}
+              <Text style={styles.label}>Email Address</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'email' && styles.inputWrapFocused,
+                  errors.email && styles.inputWrapError,
+                ]}
+              >
+                <MaterialIcons name="email" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="your.email@example.com"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (errors.email) setErrors((curr) => ({ ...curr, email: undefined }));
+                  }}
+                />
+              </View>
+              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+
+              {/* Phone */}
+              <Text style={styles.label}>Phone Number</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'phone' && styles.inputWrapFocused,
+                  errors.phone && styles.inputWrapError,
+                ]}
+              >
+                <Ionicons name="call-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="+62 812 3456 7890"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onFocus={() => setFocusedField('phone')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setPhone(text);
+                    if (errors.phone) setErrors((curr) => ({ ...curr, phone: undefined }));
+                  }}
+                />
+              </View>
+              {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
+
+              {/* Password */}
+              <Text style={styles.label}>Password</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'password' && styles.inputWrapFocused,
+                  errors.password && styles.inputWrapError,
+                ]}
+              >
+                <MaterialIcons name="lock" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Create a strong password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (errors.password) setErrors((curr) => ({ ...curr, password: undefined }));
+                  }}
+                />
+                <Pressable onPress={() => setShowPassword((curr) => !curr)} style={styles.eyeBtn}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </Pressable>
+              </View>
+              <Text style={styles.hintText}>Must be at least 8 characters with numbers and symbols</Text>
+              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+
+              {/* Confirm Password */}
+              <Text style={styles.label}>Confirm Password</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focusedField === 'confirm' && styles.inputWrapFocused,
+                  errors.confirmPassword && styles.inputWrapError,
+                ]}
+              >
+                <MaterialIcons name="lock" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Re-enter your password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onFocus={() => setFocusedField('confirm')}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (errors.confirmPassword)
+                      setErrors((curr) => ({ ...curr, confirmPassword: undefined }));
+                  }}
+                />
+                <Pressable
+                  onPress={() => setShowConfirmPassword((curr) => !curr)}
+                  style={styles.eyeBtn}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </Pressable>
+              </View>
+              {errors.confirmPassword ? (
+                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+              ) : null}
+
+              {/* Terms checkbox */}
+              <Pressable
+                style={styles.termsRow}
+                onPress={() => {
+                  setAgreedToTerms((curr) => !curr);
+                  if (errors.terms) setErrors((curr) => ({ ...curr, terms: undefined }));
+                }}
+              >
+                <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                  {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the{' '}
+                  <Text style={styles.termsLink}>Terms of Service</Text>
+                  {' '}and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
+              </Pressable>
+              {errors.terms ? <Text style={styles.errorText}>{errors.terms}</Text> : null}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.buttonPressed,
+                  loading && styles.buttonDisabled,
+                ]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {loading ? 'Creating account...' : 'Create Account  →'}
+                </Text>
               </Pressable>
             </View>
-            {errors.confirmPassword ? <Text style={styles.errorText}>{errors.confirmPassword}</Text> : null}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.buttonPressed,
-                loading && styles.buttonDisabled,
-              ]}
-              onPress={handleRegister}
-              disabled={loading}
-            >
-              <Text style={styles.primaryButtonText}>{loading ? 'Memproses...' : 'Daftar'}</Text>
-            </Pressable>
-          </View>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Already have an account?</Text>
+              <Pressable onPress={() => navigation.replace('Login')}>
+                <Text style={styles.footerLink}> Sign In</Text>
+              </Pressable>
+            </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Sudah punya akun?</Text>
-            <Pressable onPress={() => navigation.replace('Login')}>
-              <Text style={styles.footerLink}> Masuk</Text>
-            </Pressable>
+            <View style={styles.secureBox}>
+              <Ionicons name="shield-checkmark-outline" size={16} color="#16a34a" style={styles.secureIcon} />
+              <Text style={styles.secureText}>
+                <Text style={styles.secureBold}>Secure &amp; Private: </Text>
+                Your data is encrypted and never shared with third parties.
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -203,157 +311,130 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#ffffff',
+  safeArea: { flex: 1, backgroundColor: '#3b5fca' },
+  navBar: {
+    backgroundColor: '#3b5fca',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
-  decorTop: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: '#dbeafe',
-    top: -110,
-    right: -90,
-  },
-  decorSmall: {
-    position: 'absolute',
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    backgroundColor: '#eff6ff',
-    top: 112,
-    left: -28,
-  },
-  decorBottom: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: '#e8f1ff',
-    bottom: -120,
-    left: -70,
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 34,
-    paddingBottom: 26,
-    justifyContent: 'center',
-  },
-  brandRow: {
+  backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 34,
+    gap: 6,
+    alignSelf: 'flex-start',
   },
-  logoBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#dbeafe',
+  backBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  keyboardAvoid: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+
+  formSection: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 16,
+    paddingBottom: 14,
+  },
+  title: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginBottom: 2 },
+  subtitle: { fontSize: 12, color: '#64748b', marginBottom: 8 },
+
+  form: { gap: 2 },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginTop: 8,
+    marginBottom: 3,
+  },
+  inputWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    height: 44,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
   },
-  logoText: {
-    color: '#2f5d95',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  brandText: {
-    color: '#1c304a',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  heading: {
-    marginBottom: 26,
-  },
-  title: {
-    color: '#17263b',
-    fontSize: 42,
-    fontWeight: '800',
-    lineHeight: 48,
-  },
-  subtitle: {
-    color: '#607089',
-    fontSize: 16,
-    lineHeight: 24,
+  inputWrapFocused: { borderColor: '#3b5fca', backgroundColor: '#fff' },
+  inputWrapError: { borderColor: '#ef4444' },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, fontSize: 14, color: '#0f172a' },
+  eyeBtn: { padding: 4 },
+  hintText: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
+  errorText: { color: '#ef4444', fontSize: 11, marginTop: 1 },
+
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
     marginTop: 10,
   },
-  form: {
-    gap: 10,
-  },
-  input: {
-    height: 54,
-    backgroundColor: '#f8fbff',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    color: '#18283c',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#dce8f8',
-  },
-  inputError: {
-    borderColor: '#e98585',
-  },
-  errorText: {
-    color: '#c24141',
-    fontSize: 12,
-    marginTop: -4,
-  },
-  passwordWrap: {
-    position: 'relative',
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
   },
-  passwordInput: {
-    paddingRight: 76,
+  checkboxChecked: {
+    backgroundColor: '#3b5fca',
+    borderColor: '#3b5fca',
   },
-  passwordToggle: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-  },
-  passwordToggleText: {
-    color: '#527db2',
-    fontSize: 13,
-    fontWeight: '800',
-  },
+  termsText: { flex: 1, fontSize: 12, color: '#475569', lineHeight: 18 },
+  termsLink: { color: '#3b5fca', fontWeight: '700' },
+
   primaryButton: {
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#3f7fca',
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#3b5fca',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
   },
-  buttonPressed: {
-    opacity: 0.88,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
-  },
+  buttonPressed: { opacity: 0.88 },
+  buttonDisabled: { opacity: 0.65 },
+  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 30,
+    marginTop: 12,
   },
-  footerText: {
-    color: '#607089',
-    fontSize: 14,
+  footerText: { color: '#64748b', fontSize: 13 },
+  footerLink: { color: '#3b5fca', fontSize: 13, fontWeight: '800' },
+
+  secureBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    padding: 10,
+    marginTop: 20,
+    gap: 10,
   },
-  footerLink: {
-    color: '#2f5d95',
-    fontSize: 14,
-    fontWeight: '800',
+  secureIcon: { marginTop: 1 },
+  secureText: { flex: 1, fontSize: 12, color: '#166534', lineHeight: 18 },
+  secureBold: { fontWeight: '700' },
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 6,
   },
+  errorBannerText: { flex: 1, fontSize: 12, color: '#dc2626' },
 });

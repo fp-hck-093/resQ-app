@@ -3,6 +3,7 @@ import { ApolloProvider } from "@apollo/client/react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import client from "./config/apollo";
 import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
@@ -27,6 +28,7 @@ const linking = {
 
 export default function App() {
   return (
+    <SafeAreaProvider>
     <ApolloProvider client={client}>
       <NavigationContainer linking={linking}>
         <Stack.Navigator initialRouteName="Register" screenOptions={{ headerShown: false }}>
@@ -39,5 +41,6 @@ export default function App() {
       </NavigationContainer>
       <StatusBar style="light" />
     </ApolloProvider>
+    </SafeAreaProvider>
   );
 }
