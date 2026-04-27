@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -8,11 +8,11 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { gql } from '@apollo/client';
-import { useMutation } from '@apollo/client/react';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { gql } from "@apollo/client";
+import { useMutation } from "@apollo/client/react";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
 const REGISTER_MUTATION = gql`
   mutation Register($input: RegisterInput!) {
@@ -21,21 +21,21 @@ const REGISTER_MUTATION = gql`
 `;
 
 export default function RegisterScreen({ navigation }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [errors, setErrors] = useState({});
-  const [apiError, setApiError] = useState('');
+  const [apiError, setApiError] = useState("");
 
   const [register, { loading }] = useMutation(REGISTER_MUTATION, {
     onCompleted: () => {
-      navigation.replace('Login');
+      navigation.replace("Login");
     },
     onError: (error) => {
       setApiError(error.message);
@@ -44,16 +44,21 @@ export default function RegisterScreen({ navigation }) {
 
   const validate = () => {
     const newErrors = {};
-    if (!name.trim()) newErrors.name = 'Full name is required';
-    if (!email.trim()) newErrors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Invalid email format';
-    if (!phone.trim()) newErrors.phone = 'Phone number is required';
-    else if (!/^\d{8,15}$/.test(phone.replace(/[\s+-]/g, ''))) newErrors.phone = 'Invalid phone number';
-    if (!password) newErrors.password = 'Password is required';
-    else if (password.length < 5) newErrors.password = 'Minimum 5 characters';
-    if (!confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
-    else if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    if (!agreedToTerms) newErrors.terms = 'You must agree to the Terms of Service';
+    if (!name.trim()) newErrors.name = "Full name is required";
+    if (!email.trim()) newErrors.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      newErrors.email = "Invalid email format";
+    if (!phone.trim()) newErrors.phone = "Phone number is required";
+    else if (!/^\d{8,15}$/.test(phone.replace(/[\s+-]/g, "")))
+      newErrors.phone = "Invalid phone number";
+    if (!password) newErrors.password = "Password is required";
+    else if (password.length < 5) newErrors.password = "Minimum 5 characters";
+    if (!confirmPassword)
+      newErrors.confirmPassword = "Please confirm your password";
+    else if (password !== confirmPassword)
+      newErrors.confirmPassword = "Passwords do not match";
+    if (!agreedToTerms)
+      newErrors.terms = "You must agree to the Terms of Service";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -76,7 +81,10 @@ export default function RegisterScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       {/* Top nav bar */}
       <View style={styles.navBar}>
-        <Pressable style={styles.backBtn} onPress={() => navigation.replace('Login')}>
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => navigation.replace("Login")}
+        >
           <Ionicons name="arrow-back" size={16} color="#fff" />
           <Text style={styles.backBtnText}>Back to Login</Text>
         </Pressable>
@@ -84,7 +92,7 @@ export default function RegisterScreen({ navigation }) {
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -93,11 +101,17 @@ export default function RegisterScreen({ navigation }) {
         >
           <View style={styles.formSection}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Fill in your details to get started</Text>
+            <Text style={styles.subtitle}>
+              Fill in your details to get started
+            </Text>
 
             {apiError ? (
               <View style={styles.errorBanner}>
-                <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={16}
+                  color="#dc2626"
+                />
                 <Text style={styles.errorBannerText}>{apiError}</Text>
               </View>
             ) : null}
@@ -108,36 +122,49 @@ export default function RegisterScreen({ navigation }) {
               <View
                 style={[
                   styles.inputWrap,
-                  focusedField === 'name' && styles.inputWrapFocused,
+                  focusedField === "name" && styles.inputWrapFocused,
                   errors.name && styles.inputWrapError,
                 ]}
               >
-                <Ionicons name="person-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color="#94a3b8"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="John Doe"
                   placeholderTextColor="#94a3b8"
                   value={name}
-                  onFocus={() => setFocusedField('name')}
+                  onFocus={() => setFocusedField("name")}
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(text) => {
                     setName(text);
-                    if (errors.name) setErrors((curr) => ({ ...curr, name: undefined }));
+                    if (errors.name)
+                      setErrors((curr) => ({ ...curr, name: undefined }));
                   }}
                 />
               </View>
-              {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
+              {errors.name ? (
+                <Text style={styles.errorText}>{errors.name}</Text>
+              ) : null}
 
               {/* Email */}
               <Text style={styles.label}>Email Address</Text>
               <View
                 style={[
                   styles.inputWrap,
-                  focusedField === 'email' && styles.inputWrapFocused,
+                  focusedField === "email" && styles.inputWrapFocused,
                   errors.email && styles.inputWrapError,
                 ]}
               >
-                <MaterialIcons name="email" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <MaterialIcons
+                  name="email"
+                  size={20}
+                  color="#94a3b8"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="your.email@example.com"
@@ -145,98 +172,130 @@ export default function RegisterScreen({ navigation }) {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
-                  onFocus={() => setFocusedField('email')}
+                  onFocus={() => setFocusedField("email")}
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(text) => {
                     setEmail(text);
-                    if (errors.email) setErrors((curr) => ({ ...curr, email: undefined }));
+                    if (errors.email)
+                      setErrors((curr) => ({ ...curr, email: undefined }));
                   }}
                 />
               </View>
-              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+              {errors.email ? (
+                <Text style={styles.errorText}>{errors.email}</Text>
+              ) : null}
 
               {/* Phone */}
               <Text style={styles.label}>Phone Number</Text>
               <View
                 style={[
                   styles.inputWrap,
-                  focusedField === 'phone' && styles.inputWrapFocused,
+                  focusedField === "phone" && styles.inputWrapFocused,
                   errors.phone && styles.inputWrapError,
                 ]}
               >
-                <Ionicons name="call-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Ionicons
+                  name="call-outline"
+                  size={20}
+                  color="#94a3b8"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="+62 812 3456 7890"
                   placeholderTextColor="#94a3b8"
                   keyboardType="phone-pad"
                   value={phone}
-                  onFocus={() => setFocusedField('phone')}
+                  onFocus={() => setFocusedField("phone")}
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(text) => {
                     setPhone(text);
-                    if (errors.phone) setErrors((curr) => ({ ...curr, phone: undefined }));
+                    if (errors.phone)
+                      setErrors((curr) => ({ ...curr, phone: undefined }));
                   }}
                 />
               </View>
-              {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
+              {errors.phone ? (
+                <Text style={styles.errorText}>{errors.phone}</Text>
+              ) : null}
 
               {/* Password */}
               <Text style={styles.label}>Password</Text>
               <View
                 style={[
                   styles.inputWrap,
-                  focusedField === 'password' && styles.inputWrapFocused,
+                  focusedField === "password" && styles.inputWrapFocused,
                   errors.password && styles.inputWrapError,
                 ]}
               >
-                <MaterialIcons name="lock" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color="#94a3b8"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Create a strong password"
                   placeholderTextColor="#94a3b8"
                   secureTextEntry={!showPassword}
                   value={password}
-                  onFocus={() => setFocusedField('password')}
+                  onFocus={() => setFocusedField("password")}
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(text) => {
                     setPassword(text);
-                    if (errors.password) setErrors((curr) => ({ ...curr, password: undefined }));
+                    if (errors.password)
+                      setErrors((curr) => ({ ...curr, password: undefined }));
                   }}
                 />
-                <Pressable onPress={() => setShowPassword((curr) => !curr)} style={styles.eyeBtn}>
+                <Pressable
+                  onPress={() => setShowPassword((curr) => !curr)}
+                  style={styles.eyeBtn}
+                >
                   <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
                     size={20}
                     color="#94a3b8"
                   />
                 </Pressable>
               </View>
-              <Text style={styles.hintText}>Must be at least 5 characters with numbers and symbols</Text>
-              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+              <Text style={styles.hintText}>
+                Must be at least 5 characters with numbers and symbols
+              </Text>
+              {errors.password ? (
+                <Text style={styles.errorText}>{errors.password}</Text>
+              ) : null}
 
               {/* Confirm Password */}
               <Text style={styles.label}>Confirm Password</Text>
               <View
                 style={[
                   styles.inputWrap,
-                  focusedField === 'confirm' && styles.inputWrapFocused,
+                  focusedField === "confirm" && styles.inputWrapFocused,
                   errors.confirmPassword && styles.inputWrapError,
                 ]}
               >
-                <MaterialIcons name="lock" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color="#94a3b8"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Re-enter your password"
                   placeholderTextColor="#94a3b8"
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
-                  onFocus={() => setFocusedField('confirm')}
+                  onFocus={() => setFocusedField("confirm")}
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(text) => {
                     setConfirmPassword(text);
                     if (errors.confirmPassword)
-                      setErrors((curr) => ({ ...curr, confirmPassword: undefined }));
+                      setErrors((curr) => ({
+                        ...curr,
+                        confirmPassword: undefined,
+                      }));
                   }}
                 />
                 <Pressable
@@ -244,7 +303,9 @@ export default function RegisterScreen({ navigation }) {
                   style={styles.eyeBtn}
                 >
                   <Ionicons
-                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name={
+                      showConfirmPassword ? "eye-off-outline" : "eye-outline"
+                    }
                     size={20}
                     color="#94a3b8"
                   />
@@ -259,20 +320,29 @@ export default function RegisterScreen({ navigation }) {
                 style={styles.termsRow}
                 onPress={() => {
                   setAgreedToTerms((curr) => !curr);
-                  if (errors.terms) setErrors((curr) => ({ ...curr, terms: undefined }));
+                  if (errors.terms)
+                    setErrors((curr) => ({ ...curr, terms: undefined }));
                 }}
               >
-                <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-                  {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+                <View
+                  style={[
+                    styles.checkbox,
+                    agreedToTerms && styles.checkboxChecked,
+                  ]}
+                >
+                  {agreedToTerms && (
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  )}
                 </View>
                 <Text style={styles.termsText}>
-                  I agree to the{' '}
-                  <Text style={styles.termsLink}>Terms of Service</Text>
-                  {' '}and{' '}
+                  I agree to the{" "}
+                  <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
                   <Text style={styles.termsLink}>Privacy Policy</Text>
                 </Text>
               </Pressable>
-              {errors.terms ? <Text style={styles.errorText}>{errors.terms}</Text> : null}
+              {errors.terms ? (
+                <Text style={styles.errorText}>{errors.terms}</Text>
+              ) : null}
 
               <Pressable
                 style={({ pressed }) => [
@@ -284,20 +354,25 @@ export default function RegisterScreen({ navigation }) {
                 disabled={loading}
               >
                 <Text style={styles.primaryButtonText}>
-                  {loading ? 'Creating account...' : 'Create Account  →'}
+                  {loading ? "Creating account..." : "Create Account  →"}
                 </Text>
               </Pressable>
             </View>
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account?</Text>
-              <Pressable onPress={() => navigation.replace('Login')}>
+              <Pressable onPress={() => navigation.replace("Login")}>
                 <Text style={styles.footerLink}> Sign In</Text>
               </Pressable>
             </View>
 
             <View style={styles.secureBox}>
-              <Ionicons name="shield-checkmark-outline" size={16} color="#16a34a" style={styles.secureIcon} />
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={16}
+                color="#16a34a"
+                style={styles.secureIcon}
+              />
               <Text style={styles.secureText}>
                 <Text style={styles.secureBold}>Secure &amp; Private: </Text>
                 Your data is encrypted and never shared with third parties.
@@ -311,63 +386,63 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#3b5fca' },
+  safeArea: { flex: 1, backgroundColor: "#3b5fca" },
   navBar: {
-    backgroundColor: '#3b5fca',
+    backgroundColor: "#3b5fca",
     paddingHorizontal: 20,
     paddingVertical: 8,
   },
   backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
-  backBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  backBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   keyboardAvoid: { flex: 1 },
   scrollContent: { flexGrow: 1 },
 
   formSection: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 22,
     paddingTop: 16,
     paddingBottom: 14,
   },
-  title: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginBottom: 2 },
-  subtitle: { fontSize: 12, color: '#64748b', marginBottom: 8 },
+  title: { fontSize: 22, fontWeight: "800", color: "#0f172a", marginBottom: 2 },
+  subtitle: { fontSize: 12, color: "#64748b", marginBottom: 8 },
 
   form: { gap: 2 },
   label: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#1e293b',
+    fontWeight: "700",
+    color: "#1e293b",
     marginTop: 8,
     marginBottom: 3,
   },
   inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 44,
-    backgroundColor: '#f8fafc',
+    backgroundColor: "#f8fafc",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: "#e2e8f0",
     paddingHorizontal: 12,
   },
-  inputWrapFocused: { borderColor: '#3b5fca', backgroundColor: '#fff' },
-  inputWrapError: { borderColor: '#ef4444' },
+  inputWrapFocused: { borderColor: "#3b5fca", backgroundColor: "#fff" },
+  inputWrapError: { borderColor: "#ef4444" },
   inputIcon: { marginRight: 8 },
-  input: { flex: 1, fontSize: 14, color: '#0f172a' },
+  input: { flex: 1, fontSize: 14, color: "#0f172a" },
   eyeBtn: { padding: 4 },
-  hintText: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
-  errorText: { color: '#ef4444', fontSize: 11, marginTop: 1 },
+  hintText: { fontSize: 10, color: "#94a3b8", marginTop: 2 },
+  errorText: { color: "#ef4444", fontSize: 11, marginTop: 1 },
 
   termsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 10,
     marginTop: 10,
   },
@@ -376,65 +451,65 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 5,
     borderWidth: 2,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#cbd5e1",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#3b5fca',
-    borderColor: '#3b5fca',
+    backgroundColor: "#3b5fca",
+    borderColor: "#3b5fca",
   },
-  termsText: { flex: 1, fontSize: 12, color: '#475569', lineHeight: 18 },
-  termsLink: { color: '#3b5fca', fontWeight: '700' },
+  termsText: { flex: 1, fontSize: 12, color: "#475569", lineHeight: 18 },
+  termsLink: { color: "#3b5fca", fontWeight: "700" },
 
   primaryButton: {
     height: 46,
     borderRadius: 12,
-    backgroundColor: '#3b5fca',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#3b5fca",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 12,
   },
   buttonPressed: { opacity: 0.88 },
   buttonDisabled: { opacity: 0.65 },
-  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  primaryButtonText: { color: "#fff", fontSize: 15, fontWeight: "800" },
 
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 12,
   },
-  footerText: { color: '#64748b', fontSize: 13 },
-  footerLink: { color: '#3b5fca', fontSize: 13, fontWeight: '800' },
+  footerText: { color: "#64748b", fontSize: 13 },
+  footerLink: { color: "#3b5fca", fontSize: 13, fontWeight: "800" },
 
   secureBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#f0fdf4',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#f0fdf4",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: "#bbf7d0",
     padding: 10,
     marginTop: 20,
     gap: 10,
   },
   secureIcon: { marginTop: 1 },
-  secureText: { flex: 1, fontSize: 12, color: '#166534', lineHeight: 18 },
-  secureBold: { fontWeight: '700' },
+  secureText: { flex: 1, fontSize: 12, color: "#166534", lineHeight: 18 },
+  secureBold: { fontWeight: "700" },
 
   errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    backgroundColor: '#fef2f2',
+    backgroundColor: "#fef2f2",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: "#fecaca",
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 6,
   },
-  errorBannerText: { flex: 1, fontSize: 12, color: '#dc2626' },
+  errorBannerText: { flex: 1, fontSize: 12, color: "#dc2626" },
 });

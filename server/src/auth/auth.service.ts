@@ -67,8 +67,8 @@ export class AuthService {
       { secret, expiresIn: '15m' },
     );
 
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:8081';
-    const resetLink = `${frontendUrl}/reset-password?token=${token}&id=${user._id}`;
+    const serverUrl = process.env.SERVER_URL ?? 'http://localhost:3000';
+    const resetLink = `${serverUrl}/auth/reset-password?token=${token}&id=${user._id}`;
 
     await this.mailService.sendResetPasswordEmail(
       user.email,

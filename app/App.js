@@ -10,7 +10,10 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import client from "./config/apollo";
@@ -32,8 +35,13 @@ import CreateScreen from "./screens/main/CreateScreen";
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+const serverHost = (process.env.EXPO_PUBLIC_SERVER_URI ?? "")
+  .replace("/graphql", "")
+  .replace(/:3000$/, ":8081/--")
+  .replace("http://", "exp://");
+
 const linking = {
-  prefixes: ["resq://", "exp://10.0.2.2:8081/--", "exp://localhost:8081/--"],
+  prefixes: ["resq://", serverHost, "exp://localhost:8081/--"].filter(Boolean),
   config: {
     screens: {
       ResetPassword: {
@@ -56,23 +64,42 @@ function CustomCreateButton({ onPress }) {
 }
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 12);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarShowLabel: true,
+        tabBarLabelPosition: "below-icon",
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: "#3b5fca",
         tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: {
           backgroundColor: "#ffffff",
           borderTopWidth: 1,
           borderTopColor: "#F3F4F6",
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 65,
+          height: 62 + bottomInset,
+          paddingTop: 6,
+          paddingBottom: bottomInset,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "600",
+          fontWeight: "700",
+          lineHeight: 14,
+          marginTop: 0,
+          marginBottom: 0,
+        },
+        tabBarIconStyle: {
+          marginTop: 0,
+          marginBottom: 2,
+        },
+        tabBarItemStyle: {
+          height: 58,
+          paddingTop: 4,
+          paddingBottom: 2,
+          justifyContent: "center",
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
@@ -87,7 +114,7 @@ function MainTabs() {
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
           }
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return <Ionicons name={iconName} size={24} color={color} />;
         },
       })}
     >
@@ -109,6 +136,9 @@ function MainTabs() {
           tabBarButton: (props) => (
             <CustomCreateButton onPress={props.onPress} />
           ),
+          tabBarItemStyle: {
+            height: 78,
+          },
         }}
       />
       <Tab.Screen
@@ -180,21 +210,25 @@ export default function App() {
 
 const styles = StyleSheet.create({
   createBtn: {
-    top: -20,
+    top: -30,
     justifyContent: "center",
     alignItems: "center",
+    width: 82,
+    height: 82,
   },
   createBtnInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: "#ef4444",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 4,
+    borderColor: "#ffffff",
     shadowColor: "#ef4444",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
     elevation: 8,
   },
 });
