@@ -56,7 +56,9 @@ export class UsersService {
   }
 
   async updatePassword(userId: string, hashedPassword: string): Promise<void> {
-    await this.userModel.where('_id', userId).update({ password: hashedPassword });
+    await this.userModel
+      .where('_id', userId)
+      .update({ password: hashedPassword });
   }
 
   async updateLocation(

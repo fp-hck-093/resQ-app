@@ -22,7 +22,9 @@ export class MailService {
     resetLink: string,
   ): Promise<void> {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.log('[MailService] EMAIL_USER/EMAIL_PASS not set. Skipping send.');
+      console.log(
+        '[MailService] EMAIL_USER/EMAIL_PASS not set. Skipping send.',
+      );
       console.log('[MailService] Mock reset link:', resetLink);
       return;
     }
