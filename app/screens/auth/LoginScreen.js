@@ -230,13 +230,20 @@ export default function LoginScreen({ navigation }) {
               </Pressable>
             </View>
 
-            <View style={styles.emergencyBox}>
-              <Ionicons name="alert-circle-outline" size={18} color="#d97706" style={styles.emergencyIcon} />
-              <View style={styles.emergencyContent}>
-                <Text style={styles.emergencyTitle}>Emergency?</Text>
-                <Text style={styles.emergencyText}>
-                  You can browse requests without login, but sign in to submit or accept requests.
-                </Text>
+            <View style={styles.featureRow}>
+              <View style={styles.featureItem}>
+                <Ionicons name="flash-outline" size={20} color="#3b5fca" />
+                <Text style={styles.featureLabel}>Fast Response</Text>
+              </View>
+              <View style={styles.featureDivider} />
+              <View style={styles.featureItem}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#3b5fca" />
+                <Text style={styles.featureLabel}>Verified Users</Text>
+              </View>
+              <View style={styles.featureDivider} />
+              <View style={styles.featureItem}>
+                <Ionicons name="people-outline" size={20} color="#3b5fca" />
+                <Text style={styles.featureLabel}>Community</Text>
               </View>
             </View>
           </View>
@@ -393,21 +400,32 @@ const styles = StyleSheet.create({
   footerText: { color: '#64748b', fontSize: 13 },
   footerLink: { color: '#3b5fca', fontSize: 13, fontWeight: '800' },
 
-  // Emergency
-  emergencyBox: {
+  featureRow: {
     flexDirection: 'row',
-    backgroundColor: '#fffbeb',
-    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingVertical: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#fde68a',
-    padding: 10,
-    marginTop: 12,
-    gap: 8,
+    borderColor: '#e2e8f0',
   },
-  emergencyIcon: { marginTop: 1 },
-  emergencyContent: { flex: 1 },
-  emergencyTitle: { fontSize: 12, fontWeight: '800', color: '#92400e', marginBottom: 1 },
-  emergencyText: { fontSize: 11, color: '#78350f', lineHeight: 16 },
+  featureItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  featureDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#e2e8f0',
+  },
+  featureLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
 
   errorBanner: {
     flexDirection: 'row',
