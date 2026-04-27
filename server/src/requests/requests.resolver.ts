@@ -1,8 +1,9 @@
-import { Args, Float, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { Request } from './models/request.model';
 import { RequestsService } from './requests.service';
 import { CreateRequestInput } from './dto/create-request.input';
+import { GetRequestsFilterInput } from './dto/get-requests-filter.input';
 import { JwtGuard } from '../common/guards/jwt.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../users/models/user.model';
@@ -22,15 +23,10 @@ export class RequestsResolver {
   }
 
   @Query(() => [Request])
-  async getAllRequests(): Promise<Request[]> {
-    return this.requestsService.getAllRequests();
-  }
-
-  @Query(() => [Request])
-  async getRequestsByStatus(
-    @Args('status') status: string,
+  async getRequests(
+    @Args('filter', { nullable: true }) filter?: GetRequestsFilterInput,
   ): Promise<Request[]> {
-    return this.requestsService.getRequestsByStatus(status);
+    return this.requestsService.getRequests(filter);
   }
 
   @Query(() => [Request])
@@ -49,21 +45,6 @@ export class RequestsResolver {
   @Query(() => Request)
   async getRequestById(@Args('id') id: string): Promise<Request> {
     return this.requestsService.getRequestById(id);
-  }
-
-  @Query(() => [Request])
-  async getNearbyRequests(
-    @Args('latitude', { type: () => Float }) latitude: number,
-    @Args('longitude', { type: () => Float }) longitude: number,
-    @Args('status', { nullable: true }) status?: string,
-    @Args('category', { nullable: true }) category?: string,
-  ): Promise<Request[]> {
-    return this.requestsService.getNearbyRequests(
-      latitude,
-      longitude,
-      status,
-      category,
-    );
   }
 
   @UseGuards(JwtGuard)
