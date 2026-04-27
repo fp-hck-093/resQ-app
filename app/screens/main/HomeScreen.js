@@ -273,6 +273,7 @@ export default function HomeScreen({ navigation }) {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Text style={styles.logoText}>ResQ</Text>
           </View>
           <View style={styles.headerCenter}>
             <View style={styles.activeChip}>
@@ -596,6 +597,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    backgroundColor: "#fff",
   },
   header: {
     flexDirection: "row",
