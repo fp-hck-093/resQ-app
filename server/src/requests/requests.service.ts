@@ -7,6 +7,7 @@ import { InjectModel } from '@mongoloquent/nestjs';
 import { ObjectId } from 'mongodb';
 import { Request } from './models/request.model';
 import { CreateRequestInput } from './dto/create-request.input';
+import { GetRequestsFilterInput } from './dto/get-requests-filter.input';
 import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { ActivityLogStatus } from '../activity-logs/models/activity-log.model';
@@ -49,28 +50,51 @@ export class RequestsService {
     return result as unknown as Request;
   }
 
-  async getNearbyRequests(
-    latitude: number,
-    longitude: number,
-    status?: string,
-    category?: string,
-  ): Promise<Request[]> {
-    let query = this.requestModel.where('location', {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [longitude, latitude] },
-        $maxDistance: NEARBY_REQUESTS_RADIUS_KM * 1000,
-      },
-    });
+  async getRequests(filter?: GetRequestsFilterInput): Promise<Request[]> {
+    const { search, category, status, sortBy, sortOrder, latitude, longitude } =
+      filter ?? {};
+    const order = (sortOrder ?? 'desc') as 'asc' | 'desc';
+    const hasLocation = latitude !== undefined && longitude !== undefined;
 
-    if (status) query = query.where('status', status);
+    if (hasLocation) {
+      let query = this.requestModel.where('location', {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [longitude, latitude],
+          },
+          $maxDistance: NEARBY_REQUESTS_RADIUS_KM * 1000,
+        },
+      });
+      if (search)
+        query = query.where('userName', { $regex: search, $options: 'i' });
+      if (category) query = query.where('category', category);
+      if (status) query = query.where('status', status);
+
+      let results = (await query.get()) as unknown as Request[];
+      if (sortBy) {
+        results = results.sort((a, b) => {
+          const aVal = a[sortBy as keyof Request] as number | string;
+          const bVal = b[sortBy as keyof Request] as number | string;
+          return order === 'asc'
+            ? aVal > bVal
+              ? 1
+              : -1
+            : aVal < bVal
+              ? 1
+              : -1;
+        });
+      }
+      return results;
+    }
+
+    let query = this.requestModel.where('_id', { $exists: true });
+    if (search)
+      query = query.where('userName', { $regex: search, $options: 'i' });
     if (category) query = query.where('category', category);
+    if (status) query = query.where('status', status);
 
-    const results = await query.get();
-    return results as unknown as Request[];
-  }
-
-  async getAllRequests(): Promise<Request[]> {
-    const results = await this.requestModel.orderBy('createdAt', 'desc').get();
+    const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
     return results as unknown as Request[];
   }
 
