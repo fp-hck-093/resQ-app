@@ -50,7 +50,7 @@ export default function RegisterScreen({ navigation }) {
     if (!phone.trim()) newErrors.phone = 'Phone number is required';
     else if (!/^\d{8,15}$/.test(phone.replace(/[\s+-]/g, ''))) newErrors.phone = 'Invalid phone number';
     if (!password) newErrors.password = 'Password is required';
-    else if (password.length < 8) newErrors.password = 'Minimum 8 characters';
+    else if (password.length < 5) newErrors.password = 'Minimum 5 characters';
     if (!confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
     else if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
     if (!agreedToTerms) newErrors.terms = 'You must agree to the Terms of Service';
@@ -212,7 +212,7 @@ export default function RegisterScreen({ navigation }) {
                   />
                 </Pressable>
               </View>
-              <Text style={styles.hintText}>Must be at least 8 characters with numbers and symbols</Text>
+              <Text style={styles.hintText}>Must be at least 5 characters with numbers and symbols</Text>
               {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
 
               {/* Confirm Password */}
