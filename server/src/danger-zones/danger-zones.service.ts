@@ -44,20 +44,18 @@ function haversineKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function centroidFromMultiPolygon(coords: number[][][][]): [number, number] {
-  let sumLon = 0;
-  let sumLat = 0;
-  let count = 0;
-  for (const polygon of coords) {
-    for (const ring of polygon) {
-      for (const point of ring) {
-        sumLon += point[0];
-        sumLat += point[1];
-        count++;
-      }
+function centroidsFromMultiPolygon(coords: number[][][][]): [number, number][] {
+  return coords.map((polygon) => {
+    const ring = polygon[0]; // outer ring only, ignore holes
+    if (ring.length === 0) return [0, 0] as [number, number];
+    let sumLon = 0;
+    let sumLat = 0;
+    for (const point of ring) {
+      sumLon += point[0];
+      sumLat += point[1];
     }
-  }
-  return count === 0 ? [0, 0] : [sumLon / count, sumLat / count];
+    return [sumLon / ring.length, sumLat / ring.length] as [number, number];
+  });
 }
 
 function hoursFromNow(hours: number): string {
@@ -216,11 +214,14 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     const multiPolyCoords = (
       alert.location as unknown as { coordinates: number[][][][] }
     ).coordinates;
-    const [lon, lat] = centroidFromMultiPolygon(multiPolyCoords);
+    const centroids = centroidsFromMultiPolygon(multiPolyCoords);
+    if (centroids.length === 0) return null;
 
-    const nearbyEq = await this.findNearbyEarthquakes(lon, lat);
-    const nearbyWeather = await this.findNearbyDangerousWeather(lon, lat);
-    const requestCount = await this.countNearbyRequests(lon, lat);
+    // Use first centroid as representative for compound signal lookup
+    const [refLon, refLat] = centroids[0];
+    const nearbyEq = await this.findNearbyEarthquakes(refLon, refLat);
+    const nearbyWeather = await this.findNearbyDangerousWeather(refLon, refLat);
+    const requestCount = await this.countNearbyRequests(refLon, refLat);
 
     const sourceIds = [alertId];
     const sourceTypes = ['bmkg_alert'];
@@ -264,26 +265,32 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     }
 
     const activeUntil = alert.expires || hoursFromNow(zone.activeUntilHours);
+    let firstCreated: DangerZone | null = null;
 
-    const payload: Omit<IDangerZone, '_id' | 'createdAt' | 'updatedAt'> = {
-      title: zone.title,
-      description: zone.description,
-      level: zone.level,
-      sourceTypes,
-      sourceIds,
-      location: { type: 'Point', coordinates: [lon, lat] },
-      radiusKm: zone.radiusKm,
-      activeFrom: new Date().toISOString(),
-      activeUntil,
-      isActive: true,
-      requestCount,
-    };
+    // One zone per polygon centroid — same AI result, precise locations
+    for (const [lon, lat] of centroids) {
+      const payload: Omit<IDangerZone, '_id' | 'createdAt' | 'updatedAt'> = {
+        title: zone.title,
+        description: zone.description,
+        level: zone.level,
+        sourceTypes,
+        sourceIds,
+        location: { type: 'Point', coordinates: [lon, lat] },
+        radiusKm: zone.radiusKm,
+        activeFrom: new Date().toISOString(),
+        activeUntil,
+        isActive: true,
+        requestCount,
+      };
+      const result = await this.dangerZoneModel.create(payload);
+      if (!firstCreated) firstCreated = result as unknown as DangerZone;
+    }
 
-    const result = await this.dangerZoneModel.create(payload);
     this.logger.log(
-      `[DangerZones] created zone "${zone.title}" from BMKG alert`,
+      `[DangerZones] created ${centroids.length} zone(s)` +
+        ` "${zone.title}" from BMKG alert`,
     );
-    return result as unknown as DangerZone;
+    return firstCreated;
   }
 
   // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -359,8 +366,10 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       if (a.expires && a.expires < now) return false;
       const coords = (a.location as unknown as { coordinates: number[][][][] })
         .coordinates;
-      const [cLon, cLat] = centroidFromMultiPolygon(coords);
-      return haversineKm(lat, lon, cLat, cLon) <= NEARBY_KM;
+      const centroids = centroidsFromMultiPolygon(coords);
+      return centroids.some(
+        ([cLon, cLat]) => haversineKm(lat, lon, cLat, cLon) <= NEARBY_KM,
+      );
     });
   }
 
