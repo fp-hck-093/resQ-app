@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import {
+  ActivityIndicator,
+  View,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 import { ApolloProvider } from "@apollo/client/react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -8,8 +13,6 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
-import { TouchableOpacity, View, StyleSheet } from "react-native";
-
 import client from "./config/apollo";
 
 // Auth Screens
@@ -135,7 +138,14 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#3b5fca" }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#3b5fca",
+        }}
+      >
         <ActivityIndicator size="large" color="#ffffff" />
       </View>
     );
@@ -151,8 +161,14 @@ export default function App() {
           >
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+            <Stack.Screen
+              name="ForgotPassword"
+              component={ForgotPasswordScreen}
+            />
+            <Stack.Screen
+              name="ResetPassword"
+              component={ResetPasswordScreen}
+            />
             <Stack.Screen name="Home" component={MainTabs} />
           </Stack.Navigator>
         </NavigationContainer>
