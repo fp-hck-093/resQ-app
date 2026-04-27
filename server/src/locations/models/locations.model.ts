@@ -1,10 +1,11 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
 
 export interface IUserLocation {
   _id?: string;
-  userId: string;
+  userId: ObjectId;
   location: {
     type: string;
     coordinates: number[];

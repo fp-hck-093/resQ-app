@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
 import { ConfigService } from '@nestjs/config';
+import { ObjectId } from 'mongodb';
 import { DangerZone, IDangerZone } from './models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
@@ -145,7 +146,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     const nearbyWeather = await this.findNearbyDangerousWeather(lon, lat);
     const requestCount = await this.countNearbyRequests(lon, lat);
 
-    const sourceIds = [eqId];
+    const sourceIds: ObjectId[] = [new ObjectId(eqId)];
     const sourceTypes = ['earthquake'];
 
     let zone: GeminiResult;
@@ -172,11 +173,11 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       try {
         zone = await this.callGemini(signals);
         nearbyBmkg.forEach((a) => {
-          sourceIds.push(a._id.toString());
+          sourceIds.push(new ObjectId(a._id.toString()));
           sourceTypes.push('bmkg_alert');
         });
         nearbyWeather.forEach((w) => {
-          sourceIds.push(w._id.toString());
+          sourceIds.push(new ObjectId(w._id.toString()));
           sourceTypes.push('weather');
         });
       } catch {
@@ -223,7 +224,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     const nearbyWeather = await this.findNearbyDangerousWeather(refLon, refLat);
     const requestCount = await this.countNearbyRequests(refLon, refLat);
 
-    const sourceIds = [alertId];
+    const sourceIds: ObjectId[] = [new ObjectId(alertId)];
     const sourceTypes = ['bmkg_alert'];
 
     let zone: GeminiResult;
@@ -250,11 +251,11 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       try {
         zone = await this.callGemini(signals);
         nearbyEq.forEach((e) => {
-          sourceIds.push(e._id.toString());
+          sourceIds.push(new ObjectId(e._id.toString()));
           sourceTypes.push('earthquake');
         });
         nearbyWeather.forEach((w) => {
-          sourceIds.push(w._id.toString());
+          sourceIds.push(new ObjectId(w._id.toString()));
           sourceTypes.push('weather');
         });
       } catch {
@@ -336,7 +337,9 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   private async alreadyHasZone(sourceId: string): Promise<boolean> {
     const zones = await this.dangerZoneModel.where('isActive', true).get();
     return (zones as unknown as DangerZone[]).some((z) =>
-      (z.sourceIds ?? []).includes(sourceId),
+      ((z.sourceIds as unknown as ObjectId[]) ?? [])
+        .map((id) => id.toString())
+        .includes(sourceId),
     );
   }
 

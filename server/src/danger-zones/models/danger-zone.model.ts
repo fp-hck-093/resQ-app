@@ -1,4 +1,5 @@
 import { Field, Float, ID, Int, ObjectType } from '@nestjs/graphql';
+import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
 
@@ -8,7 +9,7 @@ export interface IDangerZone {
   description: string;
   level: string;
   sourceTypes: string[];
-  sourceIds: string[];
+  sourceIds: ObjectId[];
   location: { type: string; coordinates: number[] };
   radiusKm: number;
   activeFrom: string;
