@@ -108,7 +108,7 @@ export default function LoginScreen({ navigation }) {
             </Animated.View>
 
             <View style={styles.logoCard}>
-              <Image source={require('../assets/ResQ2.png')} style={styles.logoImage} />
+              <Image source={require('../../assets/ResQ2.png')} style={styles.logoImage} />
               <Text style={styles.logoCardTitle}>ResQ</Text>
               <Text style={styles.logoCardSubtitle}>CONNECTING HELP{'\n'}When It Matters Most</Text>
             </View>
