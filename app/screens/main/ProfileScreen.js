@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,13 +18,12 @@ import * as SecureStore from 'expo-secure-store';
 
 const GET_ME = gql`
   query GetMe {
-    getMe {
+    me {
       _id
       name
       email
       phone
-      role
-      avatarUrl
+      profilePhoto
     }
   }
 `;
@@ -47,32 +47,20 @@ const GET_MY_ACTIVITIES = gql`
 `;
 
 export default function ProfileScreen({ navigation }) {
+  const [logoutVisible, setLogoutVisible] = useState(false);
   const { data: meData, loading: meLoading } = useQuery(GET_ME);
   const { data: requestsData } = useQuery(GET_MY_REQUESTS);
   const { data: activitiesData } = useQuery(GET_MY_ACTIVITIES);
 
-  const user = meData?.getMe;
+  const user = meData?.me;
   const myRequests = requestsData?.getMyRequests || [];
   const myActivities = activitiesData?.getMyActivities || [];
   const helpedCount = myActivities.filter(a => a.status === 'completed').length;
   const pendingRequests = myRequests.filter(r => r.status === 'pending').length;
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Apakah kamu yakin ingin logout?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await SecureStore.deleteItemAsync('access_token');
-            navigation.replace('Login');
-          },
-        },
-      ]
-    );
+    await SecureStore.deleteItemAsync('access_token');
+    navigation.replace('Login');
   };
 
   const getInitials = (name) => {
@@ -113,7 +101,7 @@ export default function ProfileScreen({ navigation }) {
           {/* Role Badge */}
           <View style={styles.roleBadge}>
             <Ionicons name="shield-checkmark" size={12} color="#fbbf24" />
-            <Text style={styles.roleText}>{user?.role?.toUpperCase() || 'USER'}</Text>
+            <Text style={styles.roleText}>USER</Text>
           </View>
 
           {/* STATS */}
@@ -235,7 +223,7 @@ export default function ProfileScreen({ navigation }) {
 
         {/* LOGOUT */}
         <View style={styles.logoutSection}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutVisible(true)}>
             <Ionicons name="log-out-outline" size={20} color="#ef4444" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
@@ -246,6 +234,27 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* LOGOUT MODAL */}
+      <Modal transparent visible={logoutVisible} animationType="fade" onRequestClose={() => setLogoutVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setLogoutVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={32} color="#ef4444" />
+            </View>
+            <Text style={styles.modalTitle}>Logout</Text>
+            <Text style={styles.modalMessage}>Apakah kamu yakin ingin keluar dari akun ini?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setLogoutVisible(false)}>
+                <Text style={styles.modalBtnCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnConfirm} onPress={handleLogout}>
+                <Text style={styles.modalBtnConfirmText}>Ya, Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -391,4 +400,54 @@ const styles = StyleSheet.create({
 
   // Version
   version: { fontSize: 12, color: '#cbd5e1', textAlign: 'center', marginTop: 16 },
+
+  // Logout Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#fef2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  modalMessage: { fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  modalActions: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  modalBtnCancelText: { fontSize: 15, fontWeight: '700', color: '#64748b' },
+  modalBtnConfirm: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+  },
+  modalBtnConfirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
