@@ -40,25 +40,27 @@ function extractAllTags(xml: string, tag: string): string[] {
   return results;
 }
 
-function computeCentroid(polygons: string[]): { lat: number; lon: number } {
-  let sumLat = 0;
-  let sumLon = 0;
-  let count = 0;
+function parsePolygons(polygons: string[]): number[][][][] {
+  return polygons.map((poly) => {
+    const ring: number[][] = poly
+      .trim()
+      .split(/\s+/)
+      .map((pair): number[] => {
+        const [lat, lon] = pair.split(',').map(Number);
+        return [lon, lat];
+      })
+      .filter((pt) => !isNaN(pt[0]) && !isNaN(pt[1]));
 
-  for (const poly of polygons) {
-    const pairs = poly.trim().split(/\s+/);
-    for (const pair of pairs) {
-      const [lat, lon] = pair.split(',').map(Number);
-      if (!isNaN(lat) && !isNaN(lon)) {
-        sumLat += lat;
-        sumLon += lon;
-        count++;
+    if (ring.length > 0) {
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        ring.push([...first]);
       }
     }
-  }
 
-  if (count === 0) return { lat: 0, lon: 0 };
-  return { lat: sumLat / count, lon: sumLon / count };
+    return [ring];
+  });
 }
 
 @Injectable()
@@ -200,7 +202,7 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
       const areaDesc = extractAllTags(capXml, 'areaDesc').join('; ');
       const polygons = extractAllTags(capXml, 'polygon');
 
-      const { lat, lon } = computeCentroid(polygons);
+      const coordinates = parsePolygons(polygons);
       const isDangerous = DANGEROUS_SEVERITIES.includes(severity);
 
       const result = await this.bmkgAlertModel.create({
@@ -214,7 +216,7 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
         description,
         effective,
         expires,
-        location: { type: 'Point', coordinates: [lon, lat] },
+        location: { type: 'MultiPolygon', coordinates },
         alertUrl: link,
         isDangerous,
         fetchedAt: new Date(),
