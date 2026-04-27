@@ -33,7 +33,7 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const linking = {
-  prefixes: ["resq://", "exp://10.0.2.2:8081/--", "exp://localhost:8081/--"],
+  prefixes: ["resq://", "exp://10.87.2.218:8081/--", "exp://10.0.2.2:8081/--", "exp://localhost:8081/--"],
   config: {
     screens: {
       ResetPassword: {
