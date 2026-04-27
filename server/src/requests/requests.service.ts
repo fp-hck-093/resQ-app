@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
+import { ObjectId } from 'mongodb';
 import { Request } from './models/request.model';
 import { CreateRequestInput } from './dto/create-request.input';
 import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
@@ -32,7 +33,7 @@ export class RequestsService {
     }
 
     const result = await this.requestModel.create({
-      userId: input.userId,
+      userId: new ObjectId(input.userId),
       userName: input.userName,
       userPhone: input.userPhone,
       category: input.category,
@@ -90,7 +91,7 @@ export class RequestsService {
 
   async getRequestsByUserId(userId: string): Promise<Request[]> {
     const results = await this.requestModel
-      .where('userId', userId)
+      .where('userId', new ObjectId(userId))
       .orderBy('createdAt', 'desc')
       .get();
     return results as unknown as Request[];

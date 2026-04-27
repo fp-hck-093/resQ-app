@@ -1,4 +1,5 @@
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 
 export enum ActivityLogStatus {
@@ -13,8 +14,8 @@ registerEnumType(ActivityLogStatus, {
 
 export interface IActivityLog {
   _id?: string;
-  volunteerId: string;
-  requestId: string;
+  volunteerId: ObjectId;
+  requestId: ObjectId;
   status: ActivityLogStatus;
   createdAt?: Date;
   updatedAt?: Date;
