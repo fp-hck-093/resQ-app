@@ -301,7 +301,11 @@ export class RequestsService {
           $options: 'i',
         });
       if (category) baseQuery = baseQuery.where('category', category);
-      if (status) baseQuery = baseQuery.where('status', status);
+      if (status) {
+        baseQuery = baseQuery.where('status', status);
+      } else {
+        baseQuery = baseQuery.where('status', { $ne: 'completed' });
+      }
 
       const all = (await baseQuery.get()) as unknown as Request[];
       const results = all.filter((r) => {
@@ -322,6 +326,7 @@ export class RequestsService {
 
     if (!hasFilters) {
       const results = await this.requestModel
+        .where('status', { $ne: 'completed' })
         .orderBy(sortBy ?? 'createdAt', order)
         .get();
       return results as unknown as Request[];
@@ -337,6 +342,7 @@ export class RequestsService {
     if (search && category) query = query.where('category', category);
     if (search && status) query = query.where('status', status);
     if (!search && category && status) query = query.where('status', status);
+    if (!status) query = query.where('status', { $ne: 'completed' });
 
     const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
     return this.attachVolunteers(results as unknown as Request[]);
@@ -355,7 +361,11 @@ export class RequestsService {
       },
     });
 
-    if (status) query = query.where('status', status);
+    if (status) {
+      query = query.where('status', status);
+    } else {
+      query = query.where('status', { $ne: 'completed' });
+    }
     if (category) query = query.where('category', category);
 
     const results = await query.get();
