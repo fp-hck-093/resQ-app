@@ -48,9 +48,11 @@ const GET_MY_REQUESTS = gql`
 
 const GET_MY_ACTIVITIES = gql`
   query GetMyActivities {
-    getMyActivities {
-      _id
-      status
+    getMyActivityLogs(page: 1, limit: 50) {
+      data {
+        _id
+        status
+      }
     }
   }
 `;
@@ -64,8 +66,8 @@ export default function ProfileScreen({ navigation }) {
 
   const user = meData?.me;
   const myRequests = requestsData?.getMyRequests || [];
-  const myActivities = activitiesData?.getMyActivities || [];
-  const helpedCount = myActivities.filter(a => a.status === 'completed').length;
+  const myActivities = activitiesData?.getMyActivityLogs?.data || [];
+  const helpedCount = myActivities.filter(a => a.status?.toLowerCase() === 'completed').length;
   const pendingRequests = myRequests.filter(r => r.status === 'pending').length;
 
   const clearBrowserCookies = () => {
@@ -184,7 +186,7 @@ export default function ProfileScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => navigation.navigate('Activity')}
+              onPress={() => navigation.navigate('VolunteerHistory')}
             >
               <View style={styles.menuItemLeft}>
                 <View style={[styles.menuIconWrap, { backgroundColor: '#f0fdf4' }]}>
