@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
 import { ObjectId } from 'mongodb';
+import { ConfigService } from '@nestjs/config';
 import { Request } from './models/request.model';
 import { VolunteerInfo } from './dto/volunteer-info.output';
 import { CreateRequestInput } from './dto/create-request.input';
@@ -13,13 +14,42 @@ import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants'
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { ActivityLogStatus } from '../activity-logs/models/activity-log.model';
 import { User } from '../users/models/user.model';
+import { DangerZone } from '../danger-zones/models/danger-zone.model';
+import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
+import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
+
+// eslint-disable-next-line max-len
+const GEMINI_URGENCY_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+
+function haversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 @Injectable()
 export class RequestsService {
   constructor(
     @InjectModel(Request) private requestModel: typeof Request,
     @InjectModel(User) private userModel: typeof User,
+    @InjectModel(DangerZone) private dangerZoneModel: typeof DangerZone,
+    @InjectModel(EarthquakeAlert)
+    private earthquakeModel: typeof EarthquakeAlert,
+    @InjectModel(BmkgAlert) private bmkgAlertModel: typeof BmkgAlert,
     private activityLogsService: ActivityLogsService,
+    private configService: ConfigService,
   ) {}
 
   private async attachVolunteers(requests: Request[]): Promise<Request[]> {
@@ -48,6 +78,156 @@ export class RequestsService {
     return requests;
   }
 
+  // ─── Urgency Scoring ─────────────────────────────────────────────────────────
+
+  private async scoreUrgency(input: CreateRequestInput): Promise<number> {
+    const [lon, lat] = input.location.coordinates;
+    const now = new Date().toISOString();
+
+    const allZones = await this.dangerZoneModel.where('isActive', true).get();
+    const nearbyZones = (allZones as unknown as DangerZone[]).filter((z) => {
+      const [zLon, zLat] = (z.location as unknown as { coordinates: number[] })
+        .coordinates;
+      return haversineKm(lat, lon, zLat, zLon) <= z.radiusKm;
+    });
+
+    const cutoff = new Date(Date.now() - 24 * 3_600_000);
+    const allQuakes = await this.earthquakeModel
+      .where('magnitude', { $gte: 5 })
+      .where('fetchedAt', { $gte: cutoff })
+      .get();
+    const nearbyQuakes = (allQuakes as unknown as EarthquakeAlert[]).filter(
+      (e) => {
+        const [eLon, eLat] = (
+          e.location as unknown as { coordinates: number[] }
+        ).coordinates;
+        return haversineKm(lat, lon, eLat, eLon) <= 200;
+      },
+    );
+
+    const allBmkg = await this.bmkgAlertModel.where('isDangerous', true).get();
+    const nearbyBmkg = (allBmkg as unknown as BmkgAlert[]).filter((a) => {
+      if (a.expires && a.expires < now) return false;
+      const coords = (a.location as unknown as { coordinates: number[][][][] })
+        .coordinates;
+      return coords.some((polygon) => {
+        const ring = polygon[0];
+        const cLon = ring.reduce((s, p) => s + p[0], 0) / ring.length;
+        const cLat = ring.reduce((s, p) => s + p[1], 0) / ring.length;
+        return haversineKm(lat, lon, cLat, cLon) <= 100;
+      });
+    });
+
+    const locationLines = [
+      nearbyZones.length > 0
+        ? `Active danger zones: ${nearbyZones.map((z) => `${z.title} (${z.level})`).join(', ')}`
+        : 'No active danger zones at this location',
+      nearbyQuakes.length > 0
+        ? `Recent earthquakes: ${nearbyQuakes.map((e) => `M${e.magnitude} near ${e.wilayah}`).join(', ')}`
+        : 'No recent significant earthquakes nearby',
+      nearbyBmkg.length > 0
+        ? `Active weather alerts: ${nearbyBmkg.map((a) => `${a.event} (${a.severity})`).join(', ')}`
+        : 'No active weather alerts nearby',
+    ].join('\n');
+
+    const requestLines = [
+      `Category: ${input.category}`,
+      `Description: "${input.description}"`,
+      `Number of people affected: ${input.numberOfPeople}`,
+      `Address: ${input.address}`,
+    ].join('\n');
+
+    const prompt =
+      `You are a disaster response urgency analyst for Indonesia.\n` +
+      `Score the urgency of the following rescue request from 1 to 10` +
+      ` (10 = most critical, requiring immediate response).\n\n` +
+      `Location context (highest priority factor):\n${locationLines}\n\n` +
+      `Request details:\n${requestLines}\n\n` +
+      `Return a JSON object:\n` +
+      `{ "score": number (1-10), "rationale": "one sentence" }`;
+
+    type Part =
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } };
+    const parts: Part[] = [{ text: prompt }];
+
+    if (input.photos && input.photos.length > 0) {
+      try {
+        const imgRes = await fetch(input.photos[0]);
+        const buffer = await imgRes.arrayBuffer();
+        parts.push({
+          inlineData: {
+            mimeType: imgRes.headers.get('content-type') ?? 'image/jpeg',
+            data: Buffer.from(buffer).toString('base64'),
+          },
+        });
+        parts.push({
+          text: 'The image above shows the current situation at the scene.',
+        });
+      } catch {
+        // photo unavailable — score on text context only
+      }
+    }
+
+    try {
+      const apiKey = this.configService.get<string>('GEMINI_API_KEY') ?? '';
+      const res = await fetch(`${GEMINI_URGENCY_URL}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as {
+          candidates: { content: { parts: { text: string }[] } }[];
+        };
+        const text = data.candidates[0]?.content?.parts[0]?.text ?? '{}';
+        const result = JSON.parse(text) as { score: number };
+        const score = Math.round(result.score);
+        if (score >= 1 && score <= 10) return score;
+      }
+    } catch {
+      // fall through to rule-based
+    }
+
+    return this.ruleBasedScore(input, nearbyZones);
+  }
+
+  private ruleBasedScore(
+    input: CreateRequestInput,
+    dangerZones: DangerZone[],
+  ): number {
+    const categoryBase: Record<string, number> = {
+      Rescue: 8,
+      Medical: 7,
+      Shelter: 5,
+      Food: 4,
+      'Money/Item': 2,
+    };
+    let score = categoryBase[input.category] ?? 5;
+
+    if (input.numberOfPeople >= 10) score += 1;
+    else if (input.numberOfPeople >= 5) score += 0.5;
+
+    const levelWeight: Record<string, number> = {
+      extreme: 2,
+      high: 1,
+      moderate: 0.5,
+    };
+    const maxBonus = dangerZones.reduce(
+      (max, z) => Math.max(max, levelWeight[z.level] ?? 0),
+      0,
+    );
+    score += maxBonus;
+
+    return Math.min(10, Math.max(1, Math.round(score)));
+  }
+
+  // ─── CRUD ─────────────────────────────────────────────────────────────────────
+
   async createRequest(input: CreateRequestInput): Promise<Request> {
     const validCategories = [
       'Rescue',
@@ -62,6 +242,8 @@ export class RequestsService {
       );
     }
 
+    const urgencyScore = await this.scoreUrgency(input);
+
     const result = await this.requestModel.create({
       userId: new ObjectId(input.userId),
       userName: input.userName,
@@ -69,7 +251,7 @@ export class RequestsService {
       category: input.category,
       description: input.description,
       numberOfPeople: input.numberOfPeople,
-      urgencyScore: input.urgencyScore,
+      urgencyScore,
       location: input.location,
       address: input.address,
       photos: input.photos || [],
