@@ -307,8 +307,15 @@ export class RequestsService {
         baseQuery = baseQuery.where('status', { $ne: 'completed' });
       }
 
-      const all = (await baseQuery.get()) as unknown as Request[];
-      const results = all.filter((r) => {
+    // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
+    if (search) {
+      const term = search.toLowerCase();
+      all = all.filter((r) => r.userName?.toLowerCase().includes(term));
+    }
+
+    // Apply location filter in JS
+    if (hasLocation) {
+      all = all.filter((r) => {
         const coords = r.location?.coordinates as unknown as
           | number[]
           | undefined;
@@ -319,7 +326,6 @@ export class RequestsService {
           NEARBY_REQUESTS_RADIUS_KM
         );
       });
-      return this.attachVolunteers(results);
     }
 
     const hasFilters = !!(search || category || status);

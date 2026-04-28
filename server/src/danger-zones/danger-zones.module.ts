@@ -5,8 +5,11 @@ import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
 import { WeatherLog } from '../weather/models/weather-log.model';
 import { Request } from '../requests/models/request.model';
+import { UserLocation } from '../locations/models/locations.model';
+import { User } from '../users/models/user.model';
 import { DangerZonesService } from './danger-zones.service';
 import { DangerZonesResolver } from './danger-zones.resolver';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,7 +19,10 @@ import { DangerZonesResolver } from './danger-zones.resolver';
       BmkgAlert,
       WeatherLog,
       Request,
+      UserLocation,
+      User,
     ]),
+    NotificationsModule,
   ],
   providers: [DangerZonesService, DangerZonesResolver],
   exports: [DangerZonesService],

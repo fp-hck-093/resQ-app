@@ -20,9 +20,30 @@ export class ActivityLogsService {
   ) {}
 
   async create(volunteerId: string, requestId: string): Promise<ActivityLog> {
+    const vId = new ObjectId(volunteerId);
+    const rId = new ObjectId(requestId);
+    const existing = await this.activityLogModel
+      .where('volunteerId', vId)
+      .where('requestId', rId)
+      .first();
+
+    if (existing) {
+      await this.activityLogModel
+        .where('volunteerId', vId)
+        .where('requestId', rId)
+        .update({ status: ActivityLogStatus.ACTIVE });
+
+      const updated = await this.activityLogModel
+        .where('volunteerId', vId)
+        .where('requestId', rId)
+        .first();
+
+      return updated as unknown as ActivityLog;
+    }
+
     const result = await this.activityLogModel.create({
-      volunteerId: new ObjectId(volunteerId),
-      requestId: new ObjectId(requestId),
+      volunteerId: vId,
+      requestId: rId,
       status: ActivityLogStatus.ACTIVE,
     });
     return result as unknown as ActivityLog;
@@ -45,15 +66,32 @@ export class ActivityLogsService {
       throw new NotFoundException('Activity log not found');
     }
 
+    const request = await this.requestModel.find(requestId);
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.status === 'completed') {
+      throw new BadRequestException('Request is already completed');
+    }
+
     const currentStatus = exists.status;
 
     if (currentStatus === ActivityLogStatus.COMPLETED) {
+      if (status === ActivityLogStatus.COMPLETED) {
+        return exists as unknown as ActivityLog;
+      }
+
       throw new BadRequestException(
         'Cannot change status of a completed activity',
       );
     }
 
     if (currentStatus === ActivityLogStatus.CANCELLED) {
+      if (status === ActivityLogStatus.CANCELLED) {
+        return exists as unknown as ActivityLog;
+      }
+
       throw new BadRequestException(
         'Cannot change status of a cancelled activity',
       );
@@ -63,6 +101,19 @@ export class ActivityLogsService {
       .where('volunteerId', vId)
       .where('requestId', rId)
       .update({ status });
+
+    if (status === ActivityLogStatus.CANCELLED) {
+      const volunteerIds: ObjectId[] =
+        (request.volunteerIds as unknown as ObjectId[]) ?? [];
+      const remainingIds = volunteerIds.filter(
+        (id) => id.toString() !== volunteerId,
+      );
+      const nextStatus = remainingIds.length > 0 ? 'in_progress' : 'pending';
+
+      await request
+        .fill({ volunteerIds: remainingIds, status: nextStatus })
+        .save();
+    }
 
     const updated = await this.activityLogModel
       .where('volunteerId', vId)
@@ -108,7 +159,7 @@ export class ActivityLogsService {
 
     const requestDocs =
       requestIds.length > 0
-        ? await this.requestModel.where('_id', { $in: requestIds }).get()
+        ? await this.requestModel.whereIn('_id', requestIds).get()
         : [];
 
     const requestMap = new Map(

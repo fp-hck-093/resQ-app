@@ -7,13 +7,13 @@ export class UpdateUserInput {
   @Field(() => String, { nullable: true })
   @IsString()
   @IsOptional()
-  @Transform(({ value }: { value: string }) => value.trim())
+  @Transform(({ value }: { value: string }) => value?.trim())
   name?: string;
 
   @Field(() => String, { nullable: true })
   @IsString()
   @IsOptional()
-  @Transform(({ value }: { value: string }) => value.trim())
+  @Transform(({ value }: { value: string }) => value?.trim())
   phone?: string;
 
   @Field(() => String, { nullable: true })
