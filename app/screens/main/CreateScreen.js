@@ -48,7 +48,6 @@ export default function CreateScreen({ navigation }) {
     numberOfPeople: '1',
     description: '',
     address: '',
-    urgencyScore: 5,
   });
   const [locationLoading, setLocationLoading] = useState(false);
   const [pinnedLocation, setPinnedLocation]   = useState(null);
@@ -66,7 +65,7 @@ export default function CreateScreen({ navigation }) {
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        setForm({ category: '', numberOfPeople: '1', description: '', address: '', urgencyScore: 5 });
+        setForm({ category: '', numberOfPeople: '1', description: '', address: '' });
         setPinnedLocation(null);
         setPhotos([]);
         navigation.navigate('Requests');
@@ -174,16 +173,13 @@ export default function CreateScreen({ navigation }) {
 
   const handleSubmit = async () => {
     if (!form.category || !form.description) return;
+
     createRequest({
       variables: {
         input: {
-          userId: 'current',
-          userName: 'User',
-          userPhone: '-',
           category: form.category,
           description: form.description,
           numberOfPeople: parseInt(form.numberOfPeople) || 1,
-          urgencyScore: form.urgencyScore,
           location: {
             type: 'Point',
             coordinates: pinnedLocation

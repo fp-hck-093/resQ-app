@@ -12,7 +12,7 @@ export interface IUser {
   phone: string;
   password: string;
   profilePhoto?: string;
-  pushToken?: string;
+  pushTokens?: string[];
   currentLocation?: {
     type: string;
     coordinates: number[];
@@ -45,8 +45,8 @@ export class User extends Model<IUser> {
   @Field(() => String, { nullable: true })
   profilePhoto?: string;
 
-  @Field(() => String, { nullable: true })
-  pushToken?: string;
+  @Field(() => [String], { nullable: true })
+  pushTokens?: string[];
 
   @Field(() => GeoPoint, { nullable: true })
   currentLocation?: GeoPoint;

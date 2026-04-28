@@ -23,22 +23,22 @@ export class LocationInput {
 
 @InputType()
 export class CreateRequestInput {
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'User ID is required' })
-  userId: string;
+  userId?: string;
 
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'User name is required' })
-  @Transform(({ value }: { value: string }) => value.trim())
-  userName: string;
+  @Transform(({ value }: { value: string }) => value?.trim())
+  userName?: string;
 
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'User phone is required' })
-  @Transform(({ value }: { value: string }) => value.trim())
-  userPhone: string;
+  @Transform(({ value }: { value: string }) => value?.trim())
+  userPhone?: string;
 
   @Field(() => String)
   @IsString()

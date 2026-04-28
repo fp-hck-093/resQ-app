@@ -23,9 +23,9 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 const { width, height } = Dimensions.get("window");
 
-const GET_ALL_REQUESTS = gql`
-  query GetAllRequests {
-    getAllRequests {
+const GET_NEARBY_REQUESTS = gql`
+  query GetRequests($filter: GetRequestsFilterInput) {
+    getRequests(filter: $filter) {
       _id
       category
       description
@@ -86,7 +86,6 @@ export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const fullMapRef = useRef(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(300)).current;
   const [userLocation, setUserLocation] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -94,33 +93,21 @@ export default function HomeScreen({ navigation }) {
 
   const {
     data: requestsData,
-
     refetch,
-  } = useQuery(GET_ALL_REQUESTS, { pollInterval: 30000 });
+  } = useQuery(GET_NEARBY_REQUESTS, {
+    variables: userLocation
+      ? { filter: { latitude: userLocation.latitude, longitude: userLocation.longitude } }
+      : {},
+    skip: !userLocation,
+    fetchPolicy: 'network-only',
+    pollInterval: 30000,
+  });
   const { data: bmkgData } = useQuery(GET_BMKG_ALERTS, {
     pollInterval: 300000,
   });
   const { data: earthquakeData } = useQuery(GET_EARTHQUAKE_ALERTS, {
     pollInterval: 300000,
   });
-
-  // Pulse animation for markers
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.4,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, []);
 
   // Get user location every time screen is focused (including after login)
   useFocusEffect(
@@ -131,6 +118,7 @@ export default function HomeScreen({ navigation }) {
         const position = await Location.getCurrentPositionAsync({});
         const { latitude, longitude } = position.coords;
         setUserLocation({ latitude, longitude });
+        refetch({ filter: { latitude, longitude } });
         mapRef.current?.animateToRegion(
           {
             latitude,
@@ -173,7 +161,7 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const requests = requestsData?.getAllRequests || [];
+  const requests = requestsData?.getRequests || [];
   const bmkgAlerts = bmkgData?.getActiveBmkgAlerts || [];
   const earthquakes = earthquakeData?.getEarthquakeAlerts || [];
   const dangerousAlerts = bmkgAlerts.filter((a) => a.isDangerous);
@@ -211,19 +199,8 @@ export default function HomeScreen({ navigation }) {
           coordinate={{ latitude, longitude }}
           onPress={() => setSelectedRequest(request)}
         >
-          <View style={styles.markerContainer}>
-            <Animated.View
-              style={[
-                styles.markerPulse,
-                {
-                  backgroundColor: catConfig.color + "30",
-                  transform: [{ scale: pulseAnim }],
-                },
-              ]}
-            />
-            <View style={[styles.marker, { backgroundColor: catConfig.color }]}>
-              <Ionicons name={catConfig.icon} size={13} color="#fff" />
-            </View>
+          <View style={[styles.marker, { backgroundColor: catConfig.color }]}>
+            <Ionicons name={catConfig.icon} size={13} color="#fff" />
           </View>
         </Marker>
       );
@@ -260,8 +237,8 @@ export default function HomeScreen({ navigation }) {
             </Marker>
             <Circle
               center={userLocation}
-              radius={3000}
-              fillColor="rgba(59, 95, 202, 0.06)"
+              radius={5000}
+              fillColor="rgba(59, 95, 202, 0.04)"
               strokeColor="rgba(59, 95, 202, 0.2)"
               strokeWidth={1}
             />
@@ -633,13 +610,6 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 12, color: "#64748b", fontWeight: "500" },
 
   // Marker
-  markerContainer: { alignItems: "center", justifyContent: "center" },
-  markerPulse: {
-    position: "absolute",
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
   marker: {
     width: 30,
     height: 30,
