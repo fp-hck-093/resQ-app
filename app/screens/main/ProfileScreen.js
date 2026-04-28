@@ -90,6 +90,8 @@ export default function ProfileScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [avatarUri, setAvatarUri] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [showAvatarOptions, setShowAvatarOptions] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
   const {
     data: meData,
@@ -127,7 +129,7 @@ export default function ProfileScreen({ navigation }) {
 
   const user = meData?.me;
   const myRequests = requestsData?.getMyRequests || [];
-  const myActivities = activitiesData?.getMyActivities || [];
+  const myActivities = activitiesData?.getMyActivityLogs?.data || [];
   const helpedCount = myActivities.filter(
     (a) => a.status === "completed",
   ).length;
@@ -165,73 +167,67 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const uploadAvatar = async (imageUri) => {
-    setUploadingAvatar(true);
+    setShowAvatarOptions(false);
+    setUploadError(null);
     setAvatarUri(imageUri);
+    setUploadingAvatar(true);
     try {
       const token = await SecureStore.getItemAsync("access_token");
-      const serverUri = process.env.EXPO_PUBLIC_SERVER_URI?.replace(
-        "/graphql",
-        "",
-      );
+      const serverUri = process.env.EXPO_PUBLIC_SERVER_URI?.replace("/graphql", "");
       const formData = new FormData();
-      formData.append("file", {
-        uri: imageUri,
-        type: "image/jpeg",
-        name: "avatar.jpg",
-      });
+      formData.append("file", { uri: imageUri, type: "image/jpeg", name: "avatar.jpg" });
       const response = await fetch(`${serverUri}/upload/profile-photo`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       const data = await response.json();
       if (data.url) {
         await updateUser({ variables: { input: { profilePhoto: data.url } } });
+      } else {
+        setAvatarUri(null);
+        setUploadError("Upload gagal, coba lagi.");
+        setShowAvatarOptions(true);
       }
     } catch (e) {
-      console.log("Upload error:", e);
-      Alert.alert("Error", "Gagal upload foto!");
+      console.log("Upload error:", e.message);
+      setAvatarUri(null);
+      setUploadError("Upload gagal, coba lagi.");
+      setShowAvatarOptions(true);
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  const handlePickAvatar = async () => {
-    Alert.alert("Ganti Foto Profil", "Pilih sumber foto", [
-      {
-        text: "📷 Kamera",
-        onPress: async () => {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== "granted") return;
-          const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets[0])
-            await uploadAvatar(result.assets[0].uri);
-        },
-      },
-      {
-        text: "🖼️ Galeri",
-        onPress: async () => {
-          const { status } =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== "granted") return;
-          const result = await ImagePicker.launchImageLibraryAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets[0])
-            await uploadAvatar(result.assets[0].uri);
-        },
-      },
-      { text: "Batal", style: "cancel" },
-    ]);
+  const handlePickAvatar = () => {
+    setUploadError(null);
+    setShowAvatarOptions(true);
+  };
+
+  const handlePickCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") return;
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const handlePickGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
   };
 
   const handleChangePassword = () => {
@@ -301,10 +297,16 @@ export default function ProfileScreen({ navigation }) {
               ) : (
                 <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
               )}
+              {uploadingAvatar && (
+                <View style={styles.avatarUploadOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              )}
             </View>
             <TouchableOpacity
               style={styles.editAvatarBtn}
               onPress={handlePickAvatar}
+              disabled={uploadingAvatar}
             >
               <Ionicons name="camera-outline" size={14} color="#fff" />
             </TouchableOpacity>
@@ -502,6 +504,54 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* AVATAR OPTIONS MODAL */}
+      <Modal
+        transparent
+        visible={showAvatarOptions}
+        animationType="slide"
+        onRequestClose={() => setShowAvatarOptions(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowAvatarOptions(false)}
+        >
+          <Pressable style={styles.avatarOptionsCard} onPress={() => {}}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.avatarOptionsTitle}>Ganti Foto Profil</Text>
+            {uploadError && (
+              <Text style={styles.avatarOptionsError}>{uploadError}</Text>
+            )}
+            <TouchableOpacity
+              style={styles.avatarOptionBtn}
+              onPress={handlePickCamera}
+            >
+              <View style={[styles.avatarOptionIcon, { backgroundColor: "#eff6ff" }]}>
+                <Ionicons name="camera-outline" size={22} color="#3b5fca" />
+              </View>
+              <Text style={styles.avatarOptionLabel}>Kamera</Text>
+              <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+            </TouchableOpacity>
+            <View style={styles.avatarOptionDivider} />
+            <TouchableOpacity
+              style={styles.avatarOptionBtn}
+              onPress={handlePickGallery}
+            >
+              <View style={[styles.avatarOptionIcon, { backgroundColor: "#f0fdf4" }]}>
+                <Ionicons name="image-outline" size={22} color="#22c55e" />
+              </View>
+              <Text style={styles.avatarOptionLabel}>Galeri</Text>
+              <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.avatarCancelBtn}
+              onPress={() => setShowAvatarOptions(false)}
+            >
+              <Text style={styles.avatarCancelText}>Batal</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* LOGOUT MODAL */}
       <Modal
@@ -714,6 +764,13 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: 80, height: 80, borderRadius: 40 },
   avatarText: { fontSize: 28, fontWeight: "800", color: "#fff" },
+  avatarUploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 40,
+  },
   editAvatarBtn: {
     position: "absolute",
     bottom: 0,
@@ -876,6 +933,68 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     textAlign: "center",
     marginTop: 16,
+  },
+
+  // Avatar Options Modal
+  avatarOptionsCard: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  avatarOptionsTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  avatarOptionsError: {
+    fontSize: 13,
+    color: "#ef4444",
+    textAlign: "center",
+    marginBottom: 12,
+    fontWeight: "600",
+  },
+  avatarOptionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 14,
+  },
+  avatarOptionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarOptionLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  avatarOptionDivider: {
+    height: 1,
+    backgroundColor: "#f1f5f9",
+  },
+  avatarCancelBtn: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+  },
+  avatarCancelText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#64748b",
   },
 
   // Logout Modal

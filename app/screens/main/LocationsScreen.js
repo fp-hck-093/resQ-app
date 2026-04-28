@@ -80,9 +80,6 @@ export default function LocationsScreen() {
   const [showViewMapModal, setShowViewMapModal] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
   const [pinnedLocation, setPinnedLocation] = useState(null);
   const [viewMapLocation, setViewMapLocation] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -101,7 +98,6 @@ export default function LocationsScreen() {
       refetch();
       setShowAddModal(false);
       setPinnedLocation(null);
-      setSearchQuery("");
       setForm({
         address: "",
         city: "",
@@ -148,88 +144,6 @@ export default function LocationsScreen() {
       console.log("Location error:", e);
     } finally {
       setLocationLoading(false);
-    }
-  };
-
-  const handleSearchChange = async (text) => {
-    setSearchQuery(text);
-    if (text.length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5&countrycodes=id&accept-language=id`;
-      console.log("[Nominatim] fetching:", url);
-      const res = await fetch(url, { headers: { "User-Agent": "resQ-app/1.0" } });
-      console.log("[Nominatim] status:", res.status);
-      const data = await res.json();
-      console.log("[Nominatim] results:", data.length, data);
-      setSuggestions(data);
-    } catch (err) {
-      console.log("[Nominatim] error:", err);
-      setSuggestions([]);
-    }
-  };
-
-  const handleSelectSuggestion = async (item) => {
-    const latitude = parseFloat(item.lat);
-    const longitude = parseFloat(item.lon);
-    setSuggestions([]);
-    setSearchQuery(item.display_name.split(",")[0]);
-    setPinnedLocation({ latitude, longitude });
-    mapSearchRef.current?.animateToRegion(
-      { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-      800,
-    );
-    setMapLoading(true);
-    try {
-      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (geocode.length > 0) {
-        const loc = geocode[0];
-        setForm({
-          ...form,
-          address: `${loc.street || ""} ${loc.district || ""}`.trim(),
-          city: loc.city || loc.subregion || "",
-          province: loc.region || "",
-          country: loc.country || "Indonesia",
-        });
-      }
-    } catch (e) {
-      console.log("Geocode error:", e);
-    } finally {
-      setMapLoading(false);
-    }
-  };
-
-  const handleSearchLocation = async () => {
-    if (!searchQuery.trim()) return;
-    setSuggestions([]);
-    setSearchLoading(true);
-    try {
-      const results = await Location.geocodeAsync(searchQuery);
-      if (results.length > 0) {
-        const { latitude, longitude } = results[0];
-        setPinnedLocation({ latitude, longitude });
-        const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (geocode.length > 0) {
-          const loc = geocode[0];
-          setForm({
-            ...form,
-            address: `${loc.street || ""} ${loc.district || ""}`.trim(),
-            city: loc.city || loc.subregion || "",
-            province: loc.region || "",
-            country: loc.country || "Indonesia",
-          });
-        }
-        mapSearchRef.current?.animateToRegion(
-          { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-          1000,
-        );
-      }
-    } catch (e) {
-      console.log("Search error:", e);
-    } finally {
-      setSearchLoading(false);
     }
   };
 
@@ -318,7 +232,6 @@ export default function LocationsScreen() {
   const closeAddModal = () => {
     setShowAddModal(false);
     setPinnedLocation(null);
-    setSearchQuery("");
     setForm({
       address: "",
       city: "",
@@ -679,56 +592,10 @@ export default function LocationsScreen() {
             <View style={{ width: 36 }} />
           </LinearGradient>
 
-          <View style={s.mapSearch}>
-            <Ionicons name="search-outline" size={15} color="#94a3b8" />
-            <TextInput
-              style={s.mapSearchInput}
-              placeholder="Cari alamat atau tempat..."
-              placeholderTextColor="#94a3b8"
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-              onSubmitEditing={handleSearchLocation}
-              returnKeyType="search"
-            />
-            {searchLoading ? (
-              <ActivityIndicator size="small" color="#3b5fca" />
-            ) : (
-              <TouchableOpacity onPress={handleSearchLocation}>
-                <Ionicons
-                  name="arrow-forward-circle"
-                  size={22}
-                  color="#3b5fca"
-                />
-              </TouchableOpacity>
-            )}
+          <View style={s.mapHint}>
+            <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
+            <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
           </View>
-
-          {suggestions.length > 0 && (
-            <View style={s.suggestionBox}>
-              {suggestions.map((item, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    s.suggestionItem,
-                    i < suggestions.length - 1 && s.suggestionDivider,
-                  ]}
-                  onPress={() => handleSelectSuggestion(item)}
-                >
-                  <Ionicons name="location-outline" size={14} color="#3b5fca" />
-                  <Text style={s.suggestionText} numberOfLines={2}>
-                    {item.display_name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {suggestions.length === 0 && (
-            <View style={s.mapHint}>
-              <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
-              <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
-            </View>
-          )}
 
           <MapView
             ref={mapSearchRef}
