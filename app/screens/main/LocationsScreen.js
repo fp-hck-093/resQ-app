@@ -5,7 +5,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -31,8 +30,6 @@ const GET_LOCATIONS = gql`
       city
       province
       country
-      notifyOnNewRequests
-      notifyOnDangerZones
       notificationRadius
       location {
         type
@@ -49,18 +46,6 @@ const ADD_LOCATION = gql`
       _id
       address
       city
-      notifyOnNewRequests
-      notifyOnDangerZones
-    }
-  }
-`;
-
-const UPDATE_LOCATION = gql`
-  mutation UpdateLocation($input: UpdateLocationInput!) {
-    updateLocation(input: $input) {
-      _id
-      notifyOnNewRequests
-      notifyOnDangerZones
     }
   }
 `;
@@ -80,9 +65,6 @@ export default function LocationsScreen() {
   const [showViewMapModal, setShowViewMapModal] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
   const [pinnedLocation, setPinnedLocation] = useState(null);
   const [viewMapLocation, setViewMapLocation] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -101,7 +83,6 @@ export default function LocationsScreen() {
       refetch();
       setShowAddModal(false);
       setPinnedLocation(null);
-      setSearchQuery("");
       setForm({
         address: "",
         city: "",
@@ -113,9 +94,6 @@ export default function LocationsScreen() {
     onError: (e) => console.log("Add location error:", e.message),
   });
 
-  const [updateLocation] = useMutation(UPDATE_LOCATION, {
-    onCompleted: () => refetch(),
-  });
   const [deleteLocation] = useMutation(DELETE_LOCATION, {
     onCompleted: () => refetch(),
   });
@@ -148,88 +126,6 @@ export default function LocationsScreen() {
       console.log("Location error:", e);
     } finally {
       setLocationLoading(false);
-    }
-  };
-
-  const handleSearchChange = async (text) => {
-    setSearchQuery(text);
-    if (text.length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5&countrycodes=id&accept-language=id`;
-      console.log("[Nominatim] fetching:", url);
-      const res = await fetch(url, { headers: { "User-Agent": "resQ-app/1.0" } });
-      console.log("[Nominatim] status:", res.status);
-      const data = await res.json();
-      console.log("[Nominatim] results:", data.length, data);
-      setSuggestions(data);
-    } catch (err) {
-      console.log("[Nominatim] error:", err);
-      setSuggestions([]);
-    }
-  };
-
-  const handleSelectSuggestion = async (item) => {
-    const latitude = parseFloat(item.lat);
-    const longitude = parseFloat(item.lon);
-    setSuggestions([]);
-    setSearchQuery(item.display_name.split(",")[0]);
-    setPinnedLocation({ latitude, longitude });
-    mapSearchRef.current?.animateToRegion(
-      { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-      800,
-    );
-    setMapLoading(true);
-    try {
-      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (geocode.length > 0) {
-        const loc = geocode[0];
-        setForm({
-          ...form,
-          address: `${loc.street || ""} ${loc.district || ""}`.trim(),
-          city: loc.city || loc.subregion || "",
-          province: loc.region || "",
-          country: loc.country || "Indonesia",
-        });
-      }
-    } catch (e) {
-      console.log("Geocode error:", e);
-    } finally {
-      setMapLoading(false);
-    }
-  };
-
-  const handleSearchLocation = async () => {
-    if (!searchQuery.trim()) return;
-    setSuggestions([]);
-    setSearchLoading(true);
-    try {
-      const results = await Location.geocodeAsync(searchQuery);
-      if (results.length > 0) {
-        const { latitude, longitude } = results[0];
-        setPinnedLocation({ latitude, longitude });
-        const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (geocode.length > 0) {
-          const loc = geocode[0];
-          setForm({
-            ...form,
-            address: `${loc.street || ""} ${loc.district || ""}`.trim(),
-            city: loc.city || loc.subregion || "",
-            province: loc.region || "",
-            country: loc.country || "Indonesia",
-          });
-        }
-        mapSearchRef.current?.animateToRegion(
-          { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-          1000,
-        );
-      }
-    } catch (e) {
-      console.log("Search error:", e);
-    } finally {
-      setSearchLoading(false);
     }
   };
 
@@ -279,18 +175,6 @@ export default function LocationsScreen() {
     });
   };
 
-  const handleToggleNotif = (id, current) => {
-    updateLocation({
-      variables: {
-        input: {
-          locationId: id,
-          notifyOnNewRequests: !current,
-          notifyOnDangerZones: !current,
-        },
-      },
-    });
-  };
-
   const handleDelete = (id) => {
     if (confirmDeleteId === id) {
       deleteLocation({ variables: { locationId: id } });
@@ -318,7 +202,6 @@ export default function LocationsScreen() {
   const closeAddModal = () => {
     setShowAddModal(false);
     setPinnedLocation(null);
-    setSearchQuery("");
     setForm({
       address: "",
       city: "",
@@ -417,76 +300,37 @@ export default function LocationsScreen() {
                         </Text>
                       </View>
                     </View>
-                    {confirmDeleteId === loc._id ? (
-                      <View style={s.confirmRow}>
-                        <TouchableOpacity
-                          style={s.confirmCancel}
-                          onPress={() => setConfirmDeleteId(null)}
-                        >
-                          <Text style={s.confirmCancelText}>Batal</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={s.confirmDelete}
-                          onPress={() => handleDelete(loc._id)}
-                        >
-                          <Text style={s.confirmDeleteText}>Hapus</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={() => handleDelete(loc._id)}
-                        style={s.deleteBtn}
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={16}
-                          color="#94a3b8"
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Divider */}
-                  <View style={s.divider} />
-
-                  {/* Notifications toggle */}
-                  <View style={s.cardBottom}>
-                    <View style={s.notifLeft}>
-                      <Ionicons
-                        name="notifications-outline"
-                        size={16}
-                        color="#64748b"
-                      />
-                      <View>
-                        <Text style={s.notifLabel}>Notifikasi</Text>
-                        <Text style={s.notifSub}>
-                          {loc.notificationRadius || 10} km radius
-                        </Text>
-                      </View>
-                    </View>
                     <View style={s.cardActions}>
                       <TouchableOpacity
                         style={s.mapBtn}
                         onPress={() => handleViewOnMap(loc)}
                       >
-                        <Ionicons
-                          name="map-outline"
-                          size={14}
-                          color="#3b5fca"
-                        />
-                        <Text style={s.mapBtnText}>Peta</Text>
+                        <Ionicons name="map-outline" size={14} color="#3b5fca" />
+                        <Text style={s.mapBtnText}>Lihat di Peta</Text>
                       </TouchableOpacity>
-                      <Switch
-                        value={loc.notifyOnNewRequests}
-                        onValueChange={() =>
-                          handleToggleNotif(loc._id, loc.notifyOnNewRequests)
-                        }
-                        trackColor={{ false: "#e2e8f0", true: "#3b5fca" }}
-                        thumbColor="#fff"
-                        style={{
-                          transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
-                        }}
-                      />
+                      {confirmDeleteId === loc._id ? (
+                        <View style={s.confirmRow}>
+                          <TouchableOpacity
+                            style={s.confirmCancel}
+                            onPress={() => setConfirmDeleteId(null)}
+                          >
+                            <Text style={s.confirmCancelText}>Batal</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={s.confirmDelete}
+                            onPress={() => handleDelete(loc._id)}
+                          >
+                            <Text style={s.confirmDeleteText}>Hapus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => handleDelete(loc._id)}
+                          style={s.deleteBtn}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#94a3b8" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -679,56 +523,10 @@ export default function LocationsScreen() {
             <View style={{ width: 36 }} />
           </LinearGradient>
 
-          <View style={s.mapSearch}>
-            <Ionicons name="search-outline" size={15} color="#94a3b8" />
-            <TextInput
-              style={s.mapSearchInput}
-              placeholder="Cari alamat atau tempat..."
-              placeholderTextColor="#94a3b8"
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-              onSubmitEditing={handleSearchLocation}
-              returnKeyType="search"
-            />
-            {searchLoading ? (
-              <ActivityIndicator size="small" color="#3b5fca" />
-            ) : (
-              <TouchableOpacity onPress={handleSearchLocation}>
-                <Ionicons
-                  name="arrow-forward-circle"
-                  size={22}
-                  color="#3b5fca"
-                />
-              </TouchableOpacity>
-            )}
+          <View style={s.mapHint}>
+            <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
+            <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
           </View>
-
-          {suggestions.length > 0 && (
-            <View style={s.suggestionBox}>
-              {suggestions.map((item, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    s.suggestionItem,
-                    i < suggestions.length - 1 && s.suggestionDivider,
-                  ]}
-                  onPress={() => handleSelectSuggestion(item)}
-                >
-                  <Ionicons name="location-outline" size={14} color="#3b5fca" />
-                  <Text style={s.suggestionText} numberOfLines={2}>
-                    {item.display_name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {suggestions.length === 0 && (
-            <View style={s.mapHint}>
-              <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
-              <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
-            </View>
-          )}
 
           <MapView
             ref={mapSearchRef}
@@ -995,19 +793,11 @@ const s = StyleSheet.create({
   },
   confirmDeleteText: { fontSize: 11, fontWeight: "700", color: "#ef4444" },
 
-  divider: { height: 1, backgroundColor: "#f1f5f9", marginHorizontal: 16 },
-
-  cardBottom: {
+  cardActions: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 8,
   },
-  notifLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  notifLabel: { fontSize: 13, fontWeight: "600", color: "#0f172a" },
-  notifSub: { fontSize: 11, color: "#94a3b8", marginTop: 1 },
-  cardActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   mapBtn: {
     flexDirection: "row",
     alignItems: "center",

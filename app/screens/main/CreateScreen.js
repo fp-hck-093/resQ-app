@@ -25,6 +25,8 @@ import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { Modal } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 const CREATE_REQUEST = gql`
   mutation CreateRequest($input: CreateRequestInput!) {
     createRequest(input: $input) {
@@ -162,8 +164,6 @@ export default function CreateScreen({ navigation }) {
       setMapLoading(false);
     }
   };
-
-  const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const handleSearchChange = async (text) => {
     setSearchQuery(text);
