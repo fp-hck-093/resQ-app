@@ -153,25 +153,31 @@ export default function ActivityScreen({ route }) {
           </View>
         </View>
 
-        {item.status === "active" && (
+        {item.status !== "completed" && item.status !== "cancelled" && (
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={styles.completeBtn}
               onPress={() =>
                 updateStatus({
-                  variables: { requestId: item.requestId, status: "completed" },
+                  variables: { requestId: item.requestId, status: "COMPLETED" },
                 })
               }
               disabled={updateLoading}
             >
-              <Ionicons name="checkmark-circle" size={16} color="#fff" />
-              <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+              {updateLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                  <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                </>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.cancelBtn}
               onPress={() =>
                 updateStatus({
-                  variables: { requestId: item.requestId, status: "cancelled" },
+                  variables: { requestId: item.requestId, status: "CANCELLED" },
                 })
               }
               disabled={updateLoading}
