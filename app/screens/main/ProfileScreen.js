@@ -68,9 +68,11 @@ const GET_MY_REQUESTS = gql`
 
 const GET_MY_ACTIVITIES = gql`
   query GetMyActivities {
-    getMyActivities {
-      _id
-      status
+    getMyActivityLogs(page: 1, limit: 50) {
+      data {
+        _id
+        status
+      }
     }
   }
 `;
@@ -135,10 +137,12 @@ export default function ProfileScreen({ navigation }) {
 
   const clearBrowserCookies = () => {
     if (typeof document === "undefined") return;
+
     document.cookie.split(";").forEach((cookie) => {
       const [cookieName] = cookie.split("=");
       const name = cookieName.trim();
       if (!name) return;
+
       const expires = "Thu, 01 Jan 1970 00:00:00 GMT";
       document.cookie = `${name}=; expires=${expires}; path=/`;
       document.cookie = `${name}=; expires=${expires}; path=/; domain=${window.location.hostname}`;
@@ -363,7 +367,7 @@ export default function ProfileScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => navigation.navigate("Activity")}
+              onPress={() => navigation.navigate("VolunteerHistory")}
             >
               <View style={styles.menuItemLeft}>
                 <View
@@ -491,9 +495,11 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {/* VERSION */}
         <Text style={styles.version}>
           ResQ v1.0.0 • Made with ❤️ for Indonesia
         </Text>
+
         <View style={{ height: 30 }} />
       </ScrollView>
 
@@ -704,6 +710,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "rgba(255,255,255,0.5)",
     overflow: "hidden",
+    marginBottom: 12,
   },
   avatarImage: { width: 80, height: 80, borderRadius: 40 },
   avatarText: { fontSize: 28, fontWeight: "800", color: "#fff" },
@@ -720,6 +727,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   userName: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 4 },
   userEmail: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginBottom: 2 },
   userPhone: { fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 10 },
@@ -811,7 +819,10 @@ const styles = StyleSheet.create({
   menuCountText: { fontSize: 11, fontWeight: "800", color: "#fff" },
 
   // Quick Actions
-  quickActionsRow: { flexDirection: "row", gap: 10 },
+  quickActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
   quickActionCard: {
     flex: 1,
     backgroundColor: "#fff",
