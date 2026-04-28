@@ -248,9 +248,9 @@ export class RequestsService {
     const urgencyScore = await this.scoreUrgency(input);
 
     const result = await this.requestModel.create({
-      userId: new ObjectId(input.userId),
-      userName: input.userName,
-      userPhone: input.userPhone,
+      userId: new ObjectId(input.userId ?? ''),
+      userName: input.userName ?? '',
+      userPhone: input.userPhone ?? '',
       category: input.category,
       description: input.description,
       numberOfPeople: input.numberOfPeople,
