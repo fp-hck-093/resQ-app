@@ -316,7 +316,9 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       if (z.activeUntil && z.activeUntil < now) return false;
       const [zLon, zLat] = (z.location as unknown as { coordinates: number[] })
         .coordinates;
-      return haversineKm(lat, lon, zLat, zLon) <= radiusKm;
+      return (
+        haversineKm(lat, lon, zLat, zLon) <= Math.max(radiusKm, z.radiusKm)
+      );
     });
   }
 
@@ -457,10 +459,10 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
         title: `Catastrophic Earthquake M${magnitude.toFixed(1)}`,
         description:
           `A catastrophic M${magnitude.toFixed(1)} earthquake has been` +
-          ` detected. Widespread destruction is expected across a very` +
-          ` large area.`,
+          ` detected. Widespread destruction expected across most of` +
+          ` the region — all nearby populations are at risk.`,
         level: 'extreme',
-        radiusKm: 200,
+        radiusKm: 1000,
         activeUntilHours: 72,
       };
     }
@@ -471,7 +473,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
           `A great M${magnitude.toFixed(1)} earthquake has been detected.` +
           ` Serious damage expected across entire provinces.`,
         level: 'extreme',
-        radiusKm: 150,
+        radiusKm: 800,
         activeUntilHours: 72,
       };
     }
@@ -482,7 +484,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
           `A major M${magnitude.toFixed(1)} earthquake has been detected.` +
           ` Significant structural damage and aftershocks are expected.`,
         level: 'extreme',
-        radiusKm: 100,
+        radiusKm: 600,
         activeUntilHours: 48,
       };
     }
@@ -491,9 +493,9 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
         title: `Strong Earthquake M${magnitude.toFixed(1)}`,
         description:
           `A strong M${magnitude.toFixed(1)} earthquake has been detected.` +
-          ` Heavy damage expected in the affected area.`,
+          ` Heavy damage expected across a wide area.`,
         level: 'high',
-        radiusKm: 75,
+        radiusKm: 400,
         activeUntilHours: 24,
       };
     }
@@ -502,9 +504,9 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
         title: `Strong Earthquake M${magnitude.toFixed(1)}`,
         description:
           `A strong M${magnitude.toFixed(1)} earthquake has been detected.` +
-          ` Structural damage is possible in the affected area.`,
+          ` Structural damage is possible across the affected area.`,
         level: 'high',
-        radiusKm: 50,
+        radiusKm: 300,
         activeUntilHours: 24,
       };
     }
@@ -513,9 +515,9 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
         title: `Moderate Earthquake M${magnitude.toFixed(1)}`,
         description:
           `A moderate M${magnitude.toFixed(1)} earthquake has been detected.` +
-          ` Light to moderate damage possible near the epicenter.`,
+          ` Clear shaking felt widely, light damage possible.`,
         level: 'moderate',
-        radiusKm: 35,
+        radiusKm: 200,
         activeUntilHours: 12,
       };
     }
@@ -523,9 +525,9 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       title: `Moderate Earthquake M${magnitude.toFixed(1)}`,
       description:
         `A moderate M${magnitude.toFixed(1)} earthquake has been detected.` +
-        ` Minor damage may occur close to the epicenter.`,
+        ` Significant shaking felt, damage possible in weak structures.`,
       level: 'moderate',
-      radiusKm: 20,
+      radiusKm: 150,
       activeUntilHours: 12,
     };
   }
