@@ -720,7 +720,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   userName: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 4 },
   userEmail: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginBottom: 2 },
   userPhone: { fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 10 },
