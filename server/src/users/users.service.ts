@@ -80,7 +80,33 @@ export class UsersService {
       .update({ password: hashedPassword });
   }
 
+  async removePushToken(userId: string, token: string): Promise<void> {
+    const raw = (await this.userModel
+      .where('_id', userId)
+      .first()) as unknown as { pushTokens?: string[] } | null;
+    const current: string[] = raw?.pushTokens ?? [];
+    const filtered = current.filter((t) => t !== token);
+    if (filtered.length === current.length) return;
+    await this.userModel.where('_id', userId).update({ pushTokens: filtered });
+  }
+
   async savePushToken(userId: string, token: string): Promise<void> {
+    // Remove this token from any other user who currently holds it
+    const withToken = (await this.userModel
+      .where('pushTokens', token)
+      .get()) as unknown as {
+      _id: { toString(): string };
+      pushTokens: string[];
+    }[];
+
+    for (const user of withToken) {
+      if (user._id.toString() === userId) continue;
+      const filtered = user.pushTokens.filter((t) => t !== token);
+      await this.userModel
+        .where('_id', user._id)
+        .update({ pushTokens: filtered });
+    }
+
     const raw = (await this.userModel
       .where('_id', userId)
       .first()) as unknown as { pushTokens?: string[] } | null;
