@@ -70,7 +70,12 @@ export class UsersService {
     userId: string,
     input: UpdateUserInput,
   ): Promise<User | null> {
-    await this.userModel.where('_id', userId).update(input);
+    const patch = Object.fromEntries(
+      Object.entries(input).filter(([, v]) => v !== undefined && v !== null),
+    );
+    if (Object.keys(patch).length > 0) {
+      await this.userModel.where('_id', userId).update(patch);
+    }
     return this.findById(userId);
   }
 
