@@ -83,9 +83,11 @@ const STATUS_COLORS = {
 const CATEGORIES = ["Rescue", "Shelter", "Food", "Medical", "Money/Item"];
 
 function getUrgencyConfig(score) {
-  if (score >= 8) return { label: "Critical", color: "#ef4444" };
-  if (score >= 5) return { label: "High", color: "#f97316" };
-  return { label: "Low", color: "#22c55e" };
+  if (score === null || score === undefined)
+    return { label: "Verifying...", color: "#94a3b8", loading: true };
+  if (score >= 8) return { label: "Critical", color: "#ef4444", loading: false };
+  if (score >= 5) return { label: "High", color: "#f97316", loading: false };
+  return { label: "Low", color: "#22c55e", loading: false };
 }
 
 export default function RequestsScreen() {
@@ -196,6 +198,9 @@ export default function RequestsScreen() {
                 { backgroundColor: urgencyConfig.color + "20" },
               ]}
             >
+              {urgencyConfig.loading ? (
+                <ActivityIndicator size={10} color={urgencyConfig.color} />
+              ) : null}
               <Text
                 style={[styles.urgencyText, { color: urgencyConfig.color }]}
               >
@@ -258,32 +263,33 @@ export default function RequestsScreen() {
       </View>
 
       {/* FILTER TABS */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterContent}
-      >
-        {["All", ...CATEGORIES].map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[
-              styles.filterChip,
-              selectedCategory === cat && styles.filterChipActive,
-            ]}
-            onPress={() => setSelectedCategory(cat)}
-          >
-            <Text
+      <View style={styles.filterWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContent}
+        >
+          {["All", ...CATEGORIES].map((cat) => (
+            <TouchableOpacity
+              key={cat}
               style={[
-                styles.filterChipText,
-                selectedCategory === cat && styles.filterChipTextActive,
+                styles.filterChip,
+                selectedCategory === cat && styles.filterChipActive,
               ]}
+              onPress={() => setSelectedCategory(cat)}
             >
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  selectedCategory === cat && styles.filterChipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* REQUEST LIST */}
       {loading ? (
@@ -379,7 +385,11 @@ export default function RequestsScreen() {
               <View style={styles.modalInfoRow}>
                 <Ionicons name="warning-outline" size={16} color="#64748b" />
                 <Text style={styles.modalInfoText}>
-                  Urgency Score: {selectedRequest?.urgencyScore}/10
+                  Urgency Score:{" "}
+                  {selectedRequest?.urgencyScore === null ||
+                  selectedRequest?.urgencyScore === undefined
+                    ? "Verifying..."
+                    : `${selectedRequest.urgencyScore}/10`}
                 </Text>
               </View>
             </ScrollView>
@@ -531,15 +541,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  filterScroll: { maxHeight: 52, backgroundColor: "#fff" },
-  filterContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  filterWrapper: { height: 60, backgroundColor: "#fff", justifyContent: "center" },
+  filterContent: { paddingHorizontal: 16, gap: 8, alignItems: "center", flexGrow: 1 },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingHorizontal: 18,
     borderRadius: 20,
     backgroundColor: "#f1f5f9",
     borderWidth: 1,
     borderColor: "#e2e8f0",
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
   },
   filterChipActive: { backgroundColor: "#3b5fca", borderColor: "#3b5fca" },
   filterChipText: { fontSize: 13, fontWeight: "600", color: "#64748b" },

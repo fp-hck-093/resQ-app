@@ -318,6 +318,46 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
 
   // ─── Queries ─────────────────────────────────────────────────────────────────
 
+  async getEarthquakesNear(
+    lat: number,
+    lon: number,
+  ): Promise<EarthquakeAlert[]> {
+    const cutoff = new Date(Date.now() - 24 * 3_600_000);
+    const tiers: { minMag: number; maxMag: number | null; radiusKm: number }[] =
+      [
+        { minMag: 8.0, maxMag: null, radiusKm: 1000 },
+        { minMag: 7.5, maxMag: 8.0, radiusKm: 800 },
+        { minMag: 7.0, maxMag: 7.5, radiusKm: 600 },
+        { minMag: 6.5, maxMag: 7.0, radiusKm: 400 },
+        { minMag: 6.0, maxMag: 6.5, radiusKm: 300 },
+        { minMag: 5.5, maxMag: 6.0, radiusKm: 200 },
+        { minMag: 5.0, maxMag: 5.5, radiusKm: 150 },
+      ];
+
+    const results: EarthquakeAlert[] = [];
+
+    for (const { minMag, maxMag, radiusKm } of tiers) {
+      const magFilter = maxMag
+        ? { $gte: minMag, $lt: maxMag }
+        : { $gte: minMag };
+
+      const tier = await this.earthquakeModel
+        .where('magnitude', magFilter)
+        .where('fetchedAt', { $gte: cutoff })
+        .where('location', {
+          $near: {
+            $geometry: { type: 'Point', coordinates: [lon, lat] },
+            $maxDistance: radiusKm * 1000,
+          },
+        })
+        .get();
+
+      results.push(...(tier as unknown as EarthquakeAlert[]));
+    }
+
+    return results;
+  }
+
   async getActiveDangerZones(): Promise<DangerZone[]> {
     await this.deactivateExpired();
     const results = await this.dangerZoneModel
