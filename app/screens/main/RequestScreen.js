@@ -16,6 +16,15 @@ import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
+const GET_ME = gql`
+  query GetMe {
+    me {
+      _id
+      name
+    }
+  }
+`;
+
 const GET_ALL_REQUESTS = gql`
   query GetRequests {
     getRequests {
@@ -102,6 +111,9 @@ export default function RequestsScreen() {
     numberOfPeople: "1",
     address: "",
   });
+
+  const { data: meData } = useQuery(GET_ME);
+  const currentUser = meData?.me;
 
   const { data, loading, refetch } = useQuery(GET_ALL_REQUESTS, {
     pollInterval: 30000,
@@ -394,7 +406,8 @@ export default function RequestsScreen() {
               </View>
             </ScrollView>
 
-            {selectedRequest?.status === "pending" && (
+            {selectedRequest?.status === "pending" &&
+              selectedRequest?.userName !== currentUser?.name && (
               <TouchableOpacity
                 style={styles.volunteerBtn}
                 onPress={() =>
