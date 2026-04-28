@@ -1,27 +1,47 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { gql } from "@apollo/client";
-import { useQuery } from "@apollo/client/react";
+import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
-import { useMutation } from "@apollo/client/react";
+import * as ImagePicker from "expo-image-picker";
 import client from "../../config/apollo";
 import { registerForPushNotificationsAsync } from "../../utils/notifications";
 
 const REMOVE_PUSH_TOKEN = gql`
   mutation RemovePushToken($token: String!) {
     removePushToken(token: $token)
+  }
+`;
+
+const UPDATE_USER = gql`
+  mutation UpdateUser($input: UpdateUserInput!) {
+    updateUser(input: $input) {
+      _id
+      name
+      phone
+      profilePhoto
+    }
+  }
+`;
+
+const CHANGE_PASSWORD = gql`
+  mutation ChangePassword($input: ChangePasswordInput!) {
+    changePassword(input: $input)
   }
 `;
 
@@ -59,10 +79,51 @@ const GET_MY_ACTIVITIES = gql`
 
 export default function ProfileScreen({ navigation }) {
   const [logoutVisible, setLogoutVisible] = useState(false);
-  const { data: meData, loading: meLoading } = useQuery(GET_ME);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [avatarUri, setAvatarUri] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const {
+    data: meData,
+    loading: meLoading,
+    refetch: refetchMe,
+  } = useQuery(GET_ME);
   const { data: requestsData } = useQuery(GET_MY_REQUESTS);
   const { data: activitiesData } = useQuery(GET_MY_ACTIVITIES);
   const [removePushToken] = useMutation(REMOVE_PUSH_TOKEN);
+
+  const [updateUser] = useMutation(UPDATE_USER, {
+    onCompleted: () => {
+      refetchMe();
+      setAvatarUri(null);
+    },
+    onError: (e) => console.log("Update user error:", e.message),
+  });
+
+  const [changePassword, { loading: changePasswordLoading }] = useMutation(
+    CHANGE_PASSWORD,
+    {
+      onCompleted: () => {
+        Alert.alert("Berhasil! 🎉", "Password berhasil diubah!");
+        setShowPasswordModal(false);
+        setPasswordForm({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      },
+      onError: (e) =>
+        Alert.alert("Gagal", e.message || "Password lama tidak sesuai!"),
+    },
+  );
 
   const user = meData?.me;
   const myRequests = requestsData?.getMyRequests || [];
@@ -80,7 +141,6 @@ export default function ProfileScreen({ navigation }) {
     document.cookie.split(";").forEach((cookie) => {
       const [cookieName] = cookie.split("=");
       const name = cookieName.trim();
-
       if (!name) return;
 
       const expires = "Thu, 01 Jan 1970 00:00:00 GMT";
@@ -96,12 +156,109 @@ export default function ProfileScreen({ navigation }) {
         await removePushToken({ variables: { token: pushToken } });
       }
     } catch {
-      // best-effort — proceed with logout regardless
+      // best-effort
     }
     await SecureStore.deleteItemAsync("access_token");
     clearBrowserCookies();
     await client.clearStore();
     navigation.replace("Login");
+  };
+
+  const uploadAvatar = async (imageUri) => {
+    setUploadingAvatar(true);
+    setAvatarUri(imageUri);
+    try {
+      const token = await SecureStore.getItemAsync("access_token");
+      const serverUri = process.env.EXPO_PUBLIC_SERVER_URI?.replace(
+        "/graphql",
+        "",
+      );
+      const formData = new FormData();
+      formData.append("file", {
+        uri: imageUri,
+        type: "image/jpeg",
+        name: "avatar.jpg",
+      });
+      const response = await fetch(`${serverUri}/upload/profile-photo`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+        body: formData,
+      });
+      const data = await response.json();
+      if (data.url) {
+        await updateUser({ variables: { input: { profilePhoto: data.url } } });
+      }
+    } catch (e) {
+      console.log("Upload error:", e);
+      Alert.alert("Error", "Gagal upload foto!");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    Alert.alert("Ganti Foto Profil", "Pilih sumber foto", [
+      {
+        text: "📷 Kamera",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") return;
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0])
+            await uploadAvatar(result.assets[0].uri);
+        },
+      },
+      {
+        text: "🖼️ Galeri",
+        onPress: async () => {
+          const { status } =
+            await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== "granted") return;
+          const result = await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0])
+            await uploadAvatar(result.assets[0].uri);
+        },
+      },
+      { text: "Batal", style: "cancel" },
+    ]);
+  };
+
+  const handleChangePassword = () => {
+    if (
+      !passwordForm.currentPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmPassword
+    ) {
+      Alert.alert("Error", "Semua field harus diisi!");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      Alert.alert("Error", "Password baru tidak cocok!");
+      return;
+    }
+    if (passwordForm.newPassword.length < 5) {
+      Alert.alert("Error", "Password baru minimal 5 karakter!");
+      return;
+    }
+    changePassword({
+      variables: {
+        input: {
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        },
+      },
+    });
   };
 
   const getInitials = (name) => {
@@ -132,9 +289,25 @@ export default function ProfileScreen({ navigation }) {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          {/* Avatar */}
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+          <View style={styles.avatarSection}>
+            <View style={styles.avatarWrap}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : user?.profilePhoto ? (
+                <Image
+                  source={{ uri: user.profilePhoto }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.editAvatarBtn}
+              onPress={handlePickAvatar}
+            >
+              <Ionicons name="camera-outline" size={14} color="#fff" />
+            </TouchableOpacity>
           </View>
 
           <Text style={styles.userName}>{user?.name || "User"}</Text>
@@ -143,13 +316,11 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.userPhone}>📞 {user?.phone}</Text>
           )}
 
-          {/* Role Badge */}
           <View style={styles.roleBadge}>
             <Ionicons name="shield-checkmark" size={12} color="#fbbf24" />
             <Text style={styles.roleText}>USER</Text>
           </View>
 
-          {/* STATS */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{myRequests.length}</Text>
@@ -272,10 +443,29 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* NOTIFICATIONS SECTION */}
+        {/* SETTINGS */}
         <View style={styles.menuSection}>
           <Text style={styles.menuSectionTitle}>SETTINGS</Text>
           <View style={styles.menuCard}>
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemBorder]}
+              onPress={() => setShowPasswordModal(true)}
+            >
+              <View style={styles.menuItemLeft}>
+                <View
+                  style={[styles.menuIconWrap, { backgroundColor: "#fef2f2" }]}
+                >
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={18}
+                    color="#ef4444"
+                  />
+                </View>
+                <Text style={styles.menuItemLabel}>Change Password</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <View
@@ -349,6 +539,149 @@ export default function ProfileScreen({ navigation }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* CHANGE PASSWORD MODAL */}
+      <Modal visible={showPasswordModal} animationType="slide" transparent>
+        <View style={styles.editModalOverlay}>
+          <View style={styles.editModalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>Change Password</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPasswordForm({
+                    currentPassword: "",
+                    newPassword: "",
+                    confirmPassword: "",
+                  });
+                }}
+              >
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Current Password */}
+              <Text style={styles.editInputLabel}>Password Saat Ini</Text>
+              <View style={styles.passwordInputWrap}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Masukkan password saat ini..."
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showCurrentPassword}
+                  value={passwordForm.currentPassword}
+                  onChangeText={(text) =>
+                    setPasswordForm({ ...passwordForm, currentPassword: text })
+                  }
+                />
+                <TouchableOpacity
+                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                >
+                  <Ionicons
+                    name={
+                      showCurrentPassword ? "eye-off-outline" : "eye-outline"
+                    }
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* New Password */}
+              <Text style={styles.editInputLabel}>Password Baru</Text>
+              <View style={styles.passwordInputWrap}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Masukkan password baru (min. 5 karakter)..."
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showNewPassword}
+                  value={passwordForm.newPassword}
+                  onChangeText={(text) =>
+                    setPasswordForm({ ...passwordForm, newPassword: text })
+                  }
+                />
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                >
+                  <Ionicons
+                    name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Confirm Password */}
+              <Text style={styles.editInputLabel}>
+                Konfirmasi Password Baru
+              </Text>
+              <View
+                style={[
+                  styles.passwordInputWrap,
+                  passwordForm.confirmPassword &&
+                  passwordForm.newPassword !== passwordForm.confirmPassword
+                    ? { borderColor: "#ef4444" }
+                    : {},
+                ]}
+              >
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Ulangi password baru..."
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showConfirmPassword}
+                  value={passwordForm.confirmPassword}
+                  onChangeText={(text) =>
+                    setPasswordForm({ ...passwordForm, confirmPassword: text })
+                  }
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <Ionicons
+                    name={
+                      showConfirmPassword ? "eye-off-outline" : "eye-outline"
+                    }
+                    size={20}
+                    color="#94a3b8"
+                  />
+                </TouchableOpacity>
+              </View>
+              {passwordForm.confirmPassword &&
+                passwordForm.newPassword !== passwordForm.confirmPassword && (
+                  <Text style={styles.passwordErrorText}>
+                    Password tidak cocok!
+                  </Text>
+                )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.saveBtn,
+                changePasswordLoading && { opacity: 0.7 },
+              ]}
+              onPress={handleChangePassword}
+              disabled={changePasswordLoading}
+            >
+              <LinearGradient
+                colors={["#ef4444", "#f97316"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.saveBtnGradient}
+              >
+                {changePasswordLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="lock-closed" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>Ubah Password</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -364,6 +697,9 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     alignItems: "center",
   },
+
+  // Avatar
+  avatarSection: { position: "relative", marginBottom: 12 },
   avatarWrap: {
     width: 80,
     height: 80,
@@ -373,9 +709,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "rgba(255,255,255,0.5)",
+    overflow: "hidden",
     marginBottom: 12,
   },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
   avatarText: { fontSize: 28, fontWeight: "800", color: "#fff" },
+  editAvatarBtn: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#3b5fca",
+    borderWidth: 2,
+    borderColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   userName: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 4 },
   userEmail: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginBottom: 2 },
   userPhone: { fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 10 },
@@ -586,4 +938,132 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalBtnConfirmText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+
+  // Change Password Modal
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  editModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "85%",
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#e2e8f0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  editModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  editModalTitle: { fontSize: 18, fontWeight: "800", color: "#0f172a" },
+
+  // Avatar Edit
+  editAvatarSection: { alignItems: "center", marginBottom: 20 },
+  editAvatarWrap: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "#bfdbfe",
+  },
+  editAvatarImage: { width: 90, height: 90, borderRadius: 45 },
+  editAvatarText: { fontSize: 32, fontWeight: "800", color: "#3b5fca" },
+  editAvatarOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  changePhotoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#eff6ff",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  changePhotoBtnText: { fontSize: 13, fontWeight: "600", color: "#3b5fca" },
+  uploadSuccessBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+  },
+  uploadSuccessText: { fontSize: 12, color: "#22c55e", fontWeight: "600" },
+
+  // Form
+  editInputLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  editInput: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#0f172a",
+    marginBottom: 12,
+  },
+
+  // Password Input
+  passwordInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  passwordInput: { flex: 1, fontSize: 14, color: "#0f172a" },
+  passwordErrorText: {
+    fontSize: 12,
+    color: "#ef4444",
+    marginTop: -8,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+
+  // Save Button
+  saveBtn: { borderRadius: 14, overflow: "hidden", marginTop: 8 },
+  saveBtnGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    gap: 8,
+  },
+  saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
