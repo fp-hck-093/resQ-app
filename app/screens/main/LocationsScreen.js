@@ -5,7 +5,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -31,8 +30,6 @@ const GET_LOCATIONS = gql`
       city
       province
       country
-      notifyOnNewRequests
-      notifyOnDangerZones
       notificationRadius
       location {
         type
@@ -49,18 +46,6 @@ const ADD_LOCATION = gql`
       _id
       address
       city
-      notifyOnNewRequests
-      notifyOnDangerZones
-    }
-  }
-`;
-
-const UPDATE_LOCATION = gql`
-  mutation UpdateLocation($input: UpdateLocationInput!) {
-    updateLocation(input: $input) {
-      _id
-      notifyOnNewRequests
-      notifyOnDangerZones
     }
   }
 `;
@@ -109,9 +94,6 @@ export default function LocationsScreen() {
     onError: (e) => console.log("Add location error:", e.message),
   });
 
-  const [updateLocation] = useMutation(UPDATE_LOCATION, {
-    onCompleted: () => refetch(),
-  });
   const [deleteLocation] = useMutation(DELETE_LOCATION, {
     onCompleted: () => refetch(),
   });
@@ -188,18 +170,6 @@ export default function LocationsScreen() {
           country: form.country || "Indonesia",
           notifyOnNewRequests: true,
           notifyOnDangerZones: true,
-        },
-      },
-    });
-  };
-
-  const handleToggleNotif = (id, current) => {
-    updateLocation({
-      variables: {
-        input: {
-          locationId: id,
-          notifyOnNewRequests: !current,
-          notifyOnDangerZones: !current,
         },
       },
     });
@@ -330,76 +300,37 @@ export default function LocationsScreen() {
                         </Text>
                       </View>
                     </View>
-                    {confirmDeleteId === loc._id ? (
-                      <View style={s.confirmRow}>
-                        <TouchableOpacity
-                          style={s.confirmCancel}
-                          onPress={() => setConfirmDeleteId(null)}
-                        >
-                          <Text style={s.confirmCancelText}>Batal</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={s.confirmDelete}
-                          onPress={() => handleDelete(loc._id)}
-                        >
-                          <Text style={s.confirmDeleteText}>Hapus</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={() => handleDelete(loc._id)}
-                        style={s.deleteBtn}
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={16}
-                          color="#94a3b8"
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Divider */}
-                  <View style={s.divider} />
-
-                  {/* Notifications toggle */}
-                  <View style={s.cardBottom}>
-                    <View style={s.notifLeft}>
-                      <Ionicons
-                        name="notifications-outline"
-                        size={16}
-                        color="#64748b"
-                      />
-                      <View>
-                        <Text style={s.notifLabel}>Notifikasi</Text>
-                        <Text style={s.notifSub}>
-                          {loc.notificationRadius || 10} km radius
-                        </Text>
-                      </View>
-                    </View>
                     <View style={s.cardActions}>
                       <TouchableOpacity
                         style={s.mapBtn}
                         onPress={() => handleViewOnMap(loc)}
                       >
-                        <Ionicons
-                          name="map-outline"
-                          size={14}
-                          color="#3b5fca"
-                        />
-                        <Text style={s.mapBtnText}>Peta</Text>
+                        <Ionicons name="map-outline" size={14} color="#3b5fca" />
+                        <Text style={s.mapBtnText}>Lihat di Peta</Text>
                       </TouchableOpacity>
-                      <Switch
-                        value={loc.notifyOnNewRequests}
-                        onValueChange={() =>
-                          handleToggleNotif(loc._id, loc.notifyOnNewRequests)
-                        }
-                        trackColor={{ false: "#e2e8f0", true: "#3b5fca" }}
-                        thumbColor="#fff"
-                        style={{
-                          transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
-                        }}
-                      />
+                      {confirmDeleteId === loc._id ? (
+                        <View style={s.confirmRow}>
+                          <TouchableOpacity
+                            style={s.confirmCancel}
+                            onPress={() => setConfirmDeleteId(null)}
+                          >
+                            <Text style={s.confirmCancelText}>Batal</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={s.confirmDelete}
+                            onPress={() => handleDelete(loc._id)}
+                          >
+                            <Text style={s.confirmDeleteText}>Hapus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => handleDelete(loc._id)}
+                          style={s.deleteBtn}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#94a3b8" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -862,19 +793,11 @@ const s = StyleSheet.create({
   },
   confirmDeleteText: { fontSize: 11, fontWeight: "700", color: "#ef4444" },
 
-  divider: { height: 1, backgroundColor: "#f1f5f9", marginHorizontal: 16 },
-
-  cardBottom: {
+  cardActions: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 8,
   },
-  notifLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  notifLabel: { fontSize: 13, fontWeight: "600", color: "#0f172a" },
-  notifSub: { fontSize: 11, color: "#94a3b8", marginTop: 1 },
-  cardActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   mapBtn: {
     flexDirection: "row",
     alignItems: "center",
