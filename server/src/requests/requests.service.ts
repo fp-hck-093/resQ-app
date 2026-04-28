@@ -3,7 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectModel } from '@mongoloquent/nestjs';
+import { InjectDB, InjectModel } from '@mongoloquent/nestjs';
 import { ObjectId } from 'mongodb';
 import { ConfigService } from '@nestjs/config';
 import { Request } from './models/request.model';
@@ -19,6 +19,7 @@ import { User } from '../users/models/user.model';
 import { DangerZone } from '../danger-zones/models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
+import { DB } from 'mongoloquent';
 
 const GEMINI_URGENCY_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
@@ -43,6 +44,7 @@ function haversineKm(
 @Injectable()
 export class RequestsService {
   constructor(
+    @InjectDB() private db: DB,
     @InjectModel(Request) private requestModel: typeof Request,
     @InjectModel(User) private userModel: typeof User,
     @InjectModel(DangerZone) private dangerZoneModel: typeof DangerZone,
@@ -423,8 +425,6 @@ export class RequestsService {
     }
 
     return request;
-    const [withVolunteers] = await this.attachVolunteers([request]);
-    return withVolunteers;
   }
 
   async updateRequestStatus(id: string, userId: string): Promise<Request> {
@@ -472,7 +472,5 @@ export class RequestsService {
     }
 
     return request;
-    const [withVolunteers] = await this.attachVolunteers([request]);
-    return withVolunteers;
   }
 }

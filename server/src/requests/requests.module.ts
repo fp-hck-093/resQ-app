@@ -21,7 +21,7 @@ import { UsersModule } from '../users/users.module';
       BmkgAlert,
     ]),
     ActivityLogsModule,
-        NotificationsModule,
+    NotificationsModule,
     UsersModule,
   ],
   providers: [RequestsService, RequestsResolver],

@@ -63,6 +63,12 @@ function hoursFromNow(hours: number): string {
   return new Date(Date.now() + hours * 3_600_000).toISOString();
 }
 
+function bmkgSearchRadius(severity: string): number {
+  if (severity === 'Extreme') return 50;
+  if (severity === 'Severe') return 30;
+  return 20;
+}
+
 @Injectable()
 export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DangerZonesService.name);
@@ -142,8 +148,15 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     const [lon, lat] = (eq.location as unknown as { coordinates: number[] })
       .coordinates;
 
-    const nearbyBmkg = await this.findNearbyBmkgAlerts(lon, lat);
-    const nearbyWeather = await this.findNearbyDangerousWeather(lon, lat);
+    const baseZone = this.ruleBasedEarthquakeZone(eq.magnitude);
+    const searchRadius = baseZone.radiusKm;
+
+    const nearbyBmkg = await this.findNearbyBmkgAlerts(lon, lat, searchRadius);
+    const nearbyWeather = await this.findNearbyDangerousWeather(
+      lon,
+      lat,
+      searchRadius,
+    );
     const requestCount = await this.countNearbyRequests(lon, lat);
 
     const sourceIds: ObjectId[] = [new ObjectId(eqId)];
@@ -181,10 +194,10 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
           sourceTypes.push('weather');
         });
       } catch {
-        zone = this.ruleBasedEarthquakeZone(eq.magnitude);
+        zone = baseZone;
       }
     } else {
-      zone = this.ruleBasedEarthquakeZone(eq.magnitude);
+      zone = baseZone;
     }
 
     const payload: Omit<IDangerZone, '_id' | 'createdAt' | 'updatedAt'> = {
@@ -220,8 +233,17 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
 
     // Use first centroid as representative for compound signal lookup
     const [refLon, refLat] = centroids[0];
-    const nearbyEq = await this.findNearbyEarthquakes(refLon, refLat);
-    const nearbyWeather = await this.findNearbyDangerousWeather(refLon, refLat);
+    const searchRadius = bmkgSearchRadius(alert.severity);
+    const nearbyEq = await this.findNearbyEarthquakes(
+      refLon,
+      refLat,
+      searchRadius,
+    );
+    const nearbyWeather = await this.findNearbyDangerousWeather(
+      refLon,
+      refLat,
+      searchRadius,
+    );
     const requestCount = await this.countNearbyRequests(refLon, refLat);
 
     const sourceIds: ObjectId[] = [new ObjectId(alertId)];
@@ -361,6 +383,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   private async findNearbyEarthquakes(
     lon: number,
     lat: number,
+    searchRadiusKm: number,
   ): Promise<EarthquakeAlert[]> {
     const cutoff = new Date(Date.now() - 48 * 3_600_000);
     const all = await this.earthquakeModel
@@ -370,13 +393,14 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     return (all as unknown as EarthquakeAlert[]).filter((e) => {
       const [eLon, eLat] = (e.location as unknown as { coordinates: number[] })
         .coordinates;
-      return haversineKm(lat, lon, eLat, eLon) <= NEARBY_KM;
+      return haversineKm(lat, lon, eLat, eLon) <= searchRadiusKm;
     });
   }
 
   private async findNearbyBmkgAlerts(
     lon: number,
     lat: number,
+    searchRadiusKm: number,
   ): Promise<BmkgAlert[]> {
     const now = new Date().toISOString();
     const all = await this.bmkgAlertModel.where('isDangerous', true).get();
@@ -386,7 +410,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
         .coordinates;
       const centroids = centroidsFromMultiPolygon(coords);
       return centroids.some(
-        ([cLon, cLat]) => haversineKm(lat, lon, cLat, cLon) <= NEARBY_KM,
+        ([cLon, cLat]) => haversineKm(lat, lon, cLat, cLon) <= searchRadiusKm,
       );
     });
   }
@@ -394,6 +418,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   private async findNearbyDangerousWeather(
     lon: number,
     lat: number,
+    searchRadiusKm: number,
   ): Promise<WeatherLog[]> {
     const cutoff = new Date(Date.now() - 6 * 3_600_000);
     const all = await this.weatherLogModel
@@ -403,7 +428,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     return (all as unknown as WeatherLog[]).filter((w) => {
       const [wLon, wLat] = (w.location as unknown as { coordinates: number[] })
         .coordinates;
-      return haversineKm(lat, lon, wLat, wLon) <= NEARBY_KM;
+      return haversineKm(lat, lon, wLat, wLon) <= searchRadiusKm;
     });
   }
 
