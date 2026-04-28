@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -12,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,14 +34,15 @@ const CREATE_REQUEST = gql`
 `;
 
 const CATEGORIES = [
-  { key: 'Food', emoji: '🍚', label: 'Food', color: '#f97316', bg: '#fff7ed' },
-  { key: 'Medical', emoji: '💊', label: 'Medical', color: '#3b82f6', bg: '#eff6ff' },
-  { key: 'Rescue', emoji: '🚨', label: 'Rescue', color: '#ef4444', bg: '#fef2f2' },
-  { key: 'Shelter', emoji: '🏠', label: 'Shelter', color: '#8b5cf6', bg: '#f5f3ff' },
-  { key: 'Money/Item', emoji: '💰', label: 'Other', color: '#22c55e', bg: '#f0fdf4' },
+  { key: 'Rescue',     icon: 'warning-outline',   label: 'Rescue',  color: '#ef4444', bg: '#fef2f2' },
+  { key: 'Shelter',   icon: 'home-outline',       label: 'Shelter', color: '#8b5cf6', bg: '#f5f3ff' },
+  { key: 'Food',      icon: 'fast-food-outline',  label: 'Food',    color: '#f97316', bg: '#fff7ed' },
+  { key: 'Medical',   icon: 'medkit-outline',     label: 'Medical', color: '#3b82f6', bg: '#eff6ff' },
+  { key: 'Money/Item',icon: 'cash-outline',       label: 'Other',   color: '#22c55e', bg: '#f0fdf4' },
 ];
 
 export default function CreateScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [form, setForm] = useState({
     category: '',
     numberOfPeople: '1',
@@ -50,14 +50,14 @@ export default function CreateScreen({ navigation }) {
     address: '',
   });
   const [locationLoading, setLocationLoading] = useState(false);
-  const [pinnedLocation, setPinnedLocation] = useState(null);
-  const [showMapModal, setShowMapModal] = useState(false);
-  const [mapLoading, setMapLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [photos, setPhotos] = useState([]);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [pinnedLocation, setPinnedLocation]   = useState(null);
+  const [showMapModal, setShowMapModal]       = useState(false);
+  const [mapLoading, setMapLoading]           = useState(false);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [searchLoading, setSearchLoading]     = useState(false);
+  const [photos, setPhotos]                   = useState([]);
+  const [uploadingPhoto, setUploadingPhoto]   = useState(false);
+  const [success, setSuccess]                 = useState(false);
   const mapRef = React.useRef(null);
 
   const [createRequest, { loading }] = useMutation(CREATE_REQUEST, {
@@ -69,7 +69,7 @@ export default function CreateScreen({ navigation }) {
         setPinnedLocation(null);
         setPhotos([]);
         navigation.navigate('Requests');
-      }, 2000);
+      }, 2200);
     },
     onError: (error) => console.log('Create request error:', error.message),
   });
@@ -85,8 +85,7 @@ export default function CreateScreen({ navigation }) {
       const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (geocode.length > 0) {
         const loc = geocode[0];
-        const address = `${loc.street || ''} ${loc.district || ''}, ${loc.city || ''}, ${loc.region || ''}`.trim();
-        setForm({ ...form, address });
+        setForm({ ...form, address: `${loc.street || ''} ${loc.district || ''}, ${loc.city || ''}, ${loc.region || ''}`.trim() });
       }
     } catch (e) {
       console.log('Location error:', e);
@@ -103,10 +102,7 @@ export default function CreateScreen({ navigation }) {
       const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (geocode.length > 0) {
         const loc = geocode[0];
-        setForm({
-          ...form,
-          address: `${loc.street || ''} ${loc.district || ''}, ${loc.city || ''}, ${loc.region || ''}`.trim(),
-        });
+        setForm({ ...form, address: `${loc.street || ''} ${loc.district || ''}, ${loc.city || ''}, ${loc.region || ''}`.trim() });
       }
     } catch (e) {
       console.log('Geocode error:', e);
@@ -126,17 +122,9 @@ export default function CreateScreen({ navigation }) {
         const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (geocode.length > 0) {
           const loc = geocode[0];
-          setForm({
-            ...form,
-            address: `${loc.street || ''} ${loc.district || ''}, ${loc.city || ''}, ${loc.region || ''}`.trim(),
-          });
+          setForm({ ...form, address: `${loc.street || ''} ${loc.district || ''}, ${loc.city || ''}, ${loc.region || ''}`.trim() });
         }
-        mapRef.current?.animateToRegion({
-          latitude,
-          longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
+        mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 1000);
       }
     } catch (e) {
       console.log('Search error:', e);
@@ -150,84 +138,38 @@ export default function CreateScreen({ navigation }) {
     try {
       const token = await SecureStore.getItemAsync('access_token');
       const serverUri = process.env.EXPO_PUBLIC_SERVER_URI?.replace('/graphql', '');
-
       const formData = new FormData();
-      formData.append('file', {
-        uri: imageUri,
-        type: 'image/jpeg',
-        name: 'photo.jpg',
-      });
-
+      formData.append('file', { uri: imageUri, type: 'image/jpeg', name: 'photo.jpg' });
       const response = await fetch(`${serverUri}/upload/request-photo`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
-
       const data = await response.json();
-      if (data.url) {
-        setPhotos(prev => [...prev, { uri: imageUri, url: data.url }]);
-      }
+      if (data.url) setPhotos(prev => [...prev, { uri: imageUri, url: data.url }]);
     } catch (e) {
       console.log('Upload error:', e);
-      Alert.alert('Error', 'Gagal upload foto. Coba lagi!');
+      console.log('Upload error:', e);
     } finally {
       setUploadingPhoto(false);
     }
   };
 
-  const handlePickImage = async () => {
-    Alert.alert(
-      'Tambah Foto',
-      'Pilih sumber foto',
-      [
-        {
-          text: '📷 Kamera',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('Permission diperlukan', 'Izinkan akses kamera untuk mengambil foto');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhotoToCloudinary(result.assets[0].uri);
-            }
-          },
-        },
-        {
-          text: '🖼️ Galeri',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('Permission diperlukan', 'Izinkan akses galeri untuk memilih foto');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhotoToCloudinary(result.assets[0].uri);
-            }
-          },
-        },
-        { text: 'Batal', style: 'cancel' },
-      ]
-    );
+  const handlePickCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    if (!result.canceled && result.assets[0]) await uploadPhotoToCloudinary(result.assets[0].uri);
   };
 
-  const handleRemovePhoto = (index) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
+  const handlePickGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    if (!result.canceled && result.assets[0]) await uploadPhotoToCloudinary(result.assets[0].uri);
   };
+
+  const handleRemovePhoto = (index) => setPhotos(prev => prev.filter((_, i) => i !== index));
 
   const handleSubmit = async () => {
     if (!form.category || !form.description) return;
@@ -251,236 +193,303 @@ export default function CreateScreen({ navigation }) {
     });
   };
 
-  const isValid = form.category !== '' && form.description !== '';
+  const isValid = form.category !== '' && form.description.trim() !== '';
+  const selectedCat = CATEGORIES.find(c => c.key === form.category);
 
+  // ─── SUCCESS ─────────────────────────────────────────────────────────────
   if (success) {
     return (
-      <View style={styles.successContainer}>
-        <LinearGradient colors={['#ef4444', '#f97316']} style={styles.successGradient}>
-          <View style={styles.successIconWrap}>
-            <Ionicons name="checkmark-circle" size={80} color="#fff" />
+      <LinearGradient colors={['#ef4444', '#f97316']} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <View style={s.successRing}>
+          <View style={s.successCircle}>
+            <Ionicons name="checkmark" size={60} color="#ef4444" />
           </View>
-          <Text style={styles.successTitle}>Request Terkirim!</Text>
-          <Text style={styles.successDesc}>
-            Tim volunteer akan segera menghubungi kamu. Tetap tenang!
-          </Text>
-        </LinearGradient>
-      </View>
+        </View>
+        <Text style={s.successTitle}>Request Terkirim! 🎉</Text>
+        <Text style={s.successSub}>Tim volunteer akan segera menghubungi kamu.{'\n'}Tetap tenang dan aman ya!</Text>
+      </LinearGradient>
     );
   }
 
+  // ─── MAIN ─────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={s.safe} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
-        {/* HEADER */}
-        <LinearGradient colors={['#ef4444', '#f97316']} style={styles.header}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="alert-circle" size={22} color="#fff" />
+        {/* ══ HERO HEADER ══════════════════════════════════════════════════ */}
+        <LinearGradient colors={['#c0392b', '#e74c3c', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+          {/* Decorative circles */}
+          <View style={[s.decCircle, { width: 120, height: 120, top: -40, right: -20, opacity: 0.12 }]} />
+          <View style={[s.decCircle, { width: 80, height: 80, top: 10, right: 60, opacity: 0.08 }]} />
+
+          <View style={s.heroContent}>
+            <View style={s.heroIconWrap}>
+              <Ionicons name="alert-circle" size={26} color="#ef4444" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.heroTitle}>Request Help</Text>
+              <Text style={s.heroSub}>Emergency assistance when you need it</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.headerTitle}>Request Help</Text>
-            <Text style={styles.headerSubtitle}>Emergency assistance when you need it</Text>
+
+          {/* Step chips */}
+          <View style={s.stepRow}>
+            {['Location', 'Category', 'Details'].map((label, i) => {
+              const done = (i === 0 && pinnedLocation) || (i === 1 && form.category) || (i === 2 && form.description);
+              return (
+                <View key={label} style={[s.stepChip, done && s.stepChipDone]}>
+                  {done
+                    ? <Ionicons name="checkmark-circle" size={13} color="#fff" />
+                    : <View style={s.stepDot} />
+                  }
+                  <Text style={s.stepLabel}>{label}</Text>
+                </View>
+              );
+            })}
           </View>
         </LinearGradient>
 
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          {/* LOCATION */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Location</Text>
-            <View style={styles.locationCard}>
-              <View style={styles.locationLeft}>
-                <View style={styles.locationIconWrap}>
-                  <Ionicons name="location" size={20} color="#3b5fca" />
-                </View>
+          {/* ══ LOCATION ═════════════════════════════════════════════════════ */}
+          <View style={s.section}>
+            <Label text="Location" icon="location-outline" />
+            <View style={s.card}>
+              {/* Address display */}
+              <View style={s.locDisplay}>
+                <LinearGradient colors={['#3b82f6', '#6366f1']} style={s.locDisplayIcon}>
+                  <Ionicons name="navigate" size={16} color="#fff" />
+                </LinearGradient>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.locationTitle} numberOfLines={1}>
+                  <Text style={s.locDisplayTitle} numberOfLines={2}>
                     {form.address || 'Belum ada lokasi dipilih'}
                   </Text>
-                  <Text style={styles.locationSubtitle}>
-                    {pinnedLocation ? 'Lokasi sudah dipilih ✅' : 'Pilih lokasi kamu'}
+                  <Text style={s.locDisplaySub}>
+                    {pinnedLocation ? '✅  Koordinat terdeteksi' : 'Tap tombol di bawah untuk memilih'}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.locationBtns}>
-                <TouchableOpacity
-                  style={styles.locationBtn}
-                  onPress={handleGetLocation}
-                  disabled={locationLoading}
-                >
-                  {locationLoading ? (
-                    <ActivityIndicator size="small" color="#3b5fca" />
-                  ) : (
-                    <Ionicons name="locate" size={16} color="#3b5fca" />
-                  )}
-                  <Text style={styles.locationBtnText}>Detect</Text>
+              {/* Divider */}
+              <View style={s.divider} />
+
+              {/* Buttons */}
+              <View style={s.locBtns}>
+                <TouchableOpacity style={s.locBtn} onPress={handleGetLocation} disabled={locationLoading} activeOpacity={0.8}>
+                  <LinearGradient colors={['#3b82f6', '#6366f1']} style={s.locBtnGrad}>
+                    {locationLoading
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Ionicons name="locate" size={16} color="#fff" />
+                    }
+                    <Text style={s.locBtnText}>Deteksi Otomatis</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.locationBtn, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}
-                  onPress={() => setShowMapModal(true)}
-                >
-                  <Ionicons name="map" size={16} color="#8b5cf6" />
-                  <Text style={[styles.locationBtnText, { color: '#8b5cf6' }]}>Peta</Text>
+                <TouchableOpacity style={s.locBtnOutline} onPress={() => setShowMapModal(true)} activeOpacity={0.8}>
+                  <Ionicons name="map-outline" size={16} color="#8b5cf6" />
+                  <Text style={s.locBtnOutlineText}>Pilih di Peta</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
-          {/* CATEGORY */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Category <Text style={styles.required}>*</Text></Text>
-            <View style={styles.categoryGrid}>
-              {CATEGORIES.map((cat) => (
+          {/* ══ CATEGORY ═════════════════════════════════════════════════════ */}
+          <View style={s.section}>
+            <Label text="Kategori Bantuan" icon="grid-outline" required />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catRow}>
+              {CATEGORIES.map((cat) => {
+                const active = form.category === cat.key;
+                return (
+                  <TouchableOpacity
+                    key={cat.key}
+                    onPress={() => setForm({ ...form, category: cat.key })}
+                    activeOpacity={0.8}
+                  >
+                    {active ? (
+                      <LinearGradient
+                        colors={[cat.color, cat.color]}
+                        style={s.catPillActive}
+                      >
+                        <Ionicons name={cat.icon} size={14} color="#fff" />
+                        <Text style={s.catPillTextActive}>{cat.label}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={s.catPill}>
+                        <Ionicons name={cat.icon} size={14} color="#64748b" />
+                        <Text style={s.catPillText}>{cat.label}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* ══ NUMBER OF PEOPLE ═════════════════════════════════════════════ */}
+          <View style={s.section}>
+            <Label text="Jumlah Orang Terdampak" icon="people-outline" required />
+            <View style={s.card}>
+              <View style={s.peopleCounter}>
                 <TouchableOpacity
-                  key={cat.key}
-                  style={[
-                    styles.categoryCard,
-                    form.category === cat.key && { borderColor: cat.color, borderWidth: 2, backgroundColor: cat.bg }
-                  ]}
-                  onPress={() => setForm({ ...form, category: cat.key })}
+                  onPress={() => setForm({ ...form, numberOfPeople: String(Math.max(1, parseInt(form.numberOfPeople || 1) - 1)) })}
+                  style={s.counterBtn}
                 >
-                  <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                  <Text style={[styles.categoryLabel, { color: form.category === cat.key ? cat.color : '#64748b' }]}>
-                    {cat.label}
-                  </Text>
-                  {form.category === cat.key && (
-                    <View style={[styles.categoryCheck, { backgroundColor: cat.color }]}>
-                      <Ionicons name="checkmark" size={10} color="#fff" />
-                    </View>
-                  )}
+                  <LinearGradient colors={['#fef2f2', '#fee2e2']} style={s.counterBtnGrad}>
+                    <Ionicons name="remove" size={16} color="#ef4444" />
+                  </LinearGradient>
                 </TouchableOpacity>
-              ))}
+
+                <View style={s.counterDisplay}>
+                  <TextInput
+                    style={s.counterNum}
+                    keyboardType="numeric"
+                    value={form.numberOfPeople}
+                    onChangeText={(t) => setForm({ ...form, numberOfPeople: t })}
+                    textAlign="center"
+                  />
+                  <Text style={s.counterUnit}>orang</Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setForm({ ...form, numberOfPeople: String(parseInt(form.numberOfPeople || 1) + 1) })}
+                  style={s.counterBtn}
+                >
+                  <LinearGradient colors={['#ef4444', '#f97316']} style={s.counterBtnGrad}>
+                    <Ionicons name="add" size={16} color="#fff" />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+
+              <View style={s.divider} />
+
+              <View style={s.quickPick}>
+                <Text style={s.quickPickLabel}>Pilih cepat:</Text>
+                {[1, 5, 10, 25, 50, 100].map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => setForm({ ...form, numberOfPeople: String(n) })}
+                    style={[s.quickNum, form.numberOfPeople === String(n) && s.quickNumActive]}
+                  >
+                    <Text style={[s.quickNumText, form.numberOfPeople === String(n) && { color: '#ef4444' }]}>{n}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
 
-          {/* NUMBER OF PEOPLE */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Number of People Affected <Text style={styles.required}>*</Text></Text>
-            <View style={styles.numberRow}>
-              <View style={styles.numberIconWrap}>
-                <Ionicons name="people-outline" size={20} color="#64748b" />
-              </View>
+          {/* ══ DESCRIPTION ══════════════════════════════════════════════════ */}
+          <View style={s.section}>
+            <Label text="Deskripsi Situasi" icon="document-text-outline" required />
+            <View style={s.card}>
               <TextInput
-                style={styles.numberInput}
-                keyboardType="numeric"
-                value={form.numberOfPeople}
-                onChangeText={(text) => setForm({ ...form, numberOfPeople: text })}
-                placeholder="1"
-                placeholderTextColor="#94a3b8"
-              />
-              <View style={styles.numberStepper}>
-                <TouchableOpacity
-                  style={styles.stepperBtn}
-                  onPress={() => {
-                    const val = Math.max(1, parseInt(form.numberOfPeople || 1) - 1);
-                    setForm({ ...form, numberOfPeople: val.toString() });
-                  }}
-                >
-                  <Ionicons name="remove" size={18} color="#64748b" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.stepperBtn}
-                  onPress={() => {
-                    const val = parseInt(form.numberOfPeople || 1) + 1;
-                    setForm({ ...form, numberOfPeople: val.toString() });
-                  }}
-                >
-                  <Ionicons name="add" size={18} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* DESCRIPTION */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Description <Text style={styles.required}>*</Text></Text>
-            <View style={styles.textAreaWrap}>
-              <Ionicons name="document-text-outline" size={18} color="#94a3b8" style={{ marginBottom: 8 }} />
-              <TextInput
-                style={styles.textArea}
-                placeholder="Describe your situation in detail..."
-                placeholderTextColor="#94a3b8"
+                style={s.textarea}
+                placeholder="Ceritakan situasi darurat yang kamu alami secara detail...&#10;&#10;Contoh: Rumah kami kebanjiran setinggi 1 meter, kami membutuhkan perahu dan makanan untuk 5 orang."
+                placeholderTextColor="#c0ccda"
                 multiline
-                numberOfLines={5}
                 value={form.description}
-                onChangeText={(text) => setForm({ ...form, description: text.slice(0, 500) })}
+                onChangeText={(t) => setForm({ ...form, description: t.slice(0, 500) })}
                 textAlignVertical="top"
               />
-              <Text style={styles.charCount}>{form.description.length}/500</Text>
-            </View>
-          </View>
-
-          {/* PHOTOS */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Foto Kondisi</Text>
-            <Text style={styles.sectionHint}>Tambahkan foto untuk memperjelas situasi (opsional)</Text>
-
-            <View style={styles.photosRow}>
-              {/* Existing photos */}
-              {photos.map((photo, index) => (
-                <View key={index} style={styles.photoWrap}>
-                  <Image source={{ uri: photo.uri }} style={styles.photoThumb} />
-                  {uploadingPhoto && index === photos.length - 1 ? (
-                    <View style={styles.photoUploadingOverlay}>
-                      <ActivityIndicator size="small" color="#fff" />
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.photoRemoveBtn}
-                      onPress={() => handleRemovePhoto(index)}
-                    >
-                      <Ionicons name="close-circle" size={20} color="#ef4444" />
-                    </TouchableOpacity>
-                  )}
+              <View style={s.charRow}>
+                <View style={s.charTrack}>
+                  <LinearGradient
+                    colors={form.description.length > 400 ? ['#f97316', '#ef4444'] : ['#ef4444', '#f97316']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[s.charFill, { width: `${(form.description.length / 500) * 100}%` }]}
+                  />
                 </View>
-              ))}
-
-              {/* Add photo button */}
-              {photos.length < 4 && (
-                <TouchableOpacity
-                  style={styles.addPhotoBtn}
-                  onPress={handlePickImage}
-                  disabled={uploadingPhoto}
-                >
-                  {uploadingPhoto ? (
-                    <ActivityIndicator size="small" color="#3b5fca" />
-                  ) : (
-                    <>
-                      <Ionicons name="camera" size={24} color="#3b5fca" />
-                      <Text style={styles.addPhotoBtnText}>Tambah Foto</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
+                <Text style={s.charCount}>{form.description.length}/500</Text>
+              </View>
             </View>
           </View>
 
-          <View style={{ height: 120 }} />
+          {/* ══ PHOTOS ═══════════════════════════════════════════════════════ */}
+          <View style={s.section}>
+            <Label text="Foto Kondisi" icon="camera-outline" hint="Opsional · Maks. 4 foto" />
+            <View style={s.card}>
+              <View style={s.photoGrid}>
+                {photos.map((photo, i) => (
+                  <View key={i} style={s.photoWrap}>
+                    <Image source={{ uri: photo.uri }} style={s.photoImg} />
+                    {uploadingPhoto && i === photos.length - 1 ? (
+                      <View style={s.photoOverlay}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={{ fontSize: 10, color: '#fff', marginTop: 4 }}>Uploading...</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={s.photoRemove} onPress={() => handleRemovePhoto(i)}>
+                        <View style={s.photoRemoveBtn}>
+                          <Ionicons name="close" size={11} color="#fff" />
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+
+                {photos.length < 4 && !uploadingPhoto && (
+                  <>
+                    <TouchableOpacity style={s.addPhoto} onPress={handlePickCamera} activeOpacity={0.7}>
+                      <LinearGradient colors={['#eff6ff', '#dbeafe']} style={s.addPhotoInner}>
+                        <Ionicons name="camera" size={18} color="#3b82f6" />
+                        <Text style={s.addPhotoText}>Kamera</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.addPhoto} onPress={handlePickGallery} activeOpacity={0.7}>
+                      <LinearGradient colors={['#f5f3ff', '#ede9fe']} style={s.addPhotoInner}>
+                        <Ionicons name="image-outline" size={18} color="#8b5cf6" />
+                        <Text style={[s.addPhotoText, { color: '#8b5cf6' }]}>Galeri</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {photos.length < 4 && uploadingPhoto && (
+                  <View style={s.addPhoto}>
+                    <LinearGradient colors={['#eff6ff', '#dbeafe']} style={s.addPhotoInner}>
+                      <ActivityIndicator size="small" color="#3b82f6" />
+                    </LinearGradient>
+                  </View>
+                )}
+
+                {photos.length === 0 && (
+                  <Text style={s.photoHint}>Foto membantu volunteer memahami situasimu lebih baik</Text>
+                )}
+              </View>
+            </View>
+          </View>
+
+          <View style={{ height: 100 + insets.bottom }} />
         </ScrollView>
 
-        {/* SUBMIT BUTTON */}
-        <View style={styles.submitContainer}>
-          <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={!isValid || loading}
-            style={[styles.submitBtn, (!isValid || loading) && { opacity: 0.6 }]}
-          >
+        {/* ══ SUBMIT ═══════════════════════════════════════════════════════ */}
+        <View style={[s.submitBar, { paddingBottom: insets.bottom + 4 }]}>
+          {!isValid && (
+            <View style={s.validHint}>
+              <Ionicons name="alert-circle-outline" size={13} color="#f97316" />
+              <Text style={s.validHintText}>
+                {!form.category ? '👆 Pilih kategori bantuan terlebih dahulu' : '✏️ Tambahkan deskripsi situasimu'}
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity onPress={handleSubmit} disabled={!isValid || loading} activeOpacity={0.88}>
             <LinearGradient
-              colors={isValid ? ['#ef4444', '#f97316'] : ['#94a3b8', '#94a3b8']}
+              colors={isValid ? ['#c0392b', '#e74c3c', '#f97316'] : ['#e2e8f0', '#e2e8f0']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.submitBtnGradient}
+              style={s.submitBtn}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="alert-circle-outline" size={20} color="#fff" />
-                  <Text style={styles.submitBtnText}>Submit Emergency Request</Text>
-                  <Ionicons name="send" size={18} color="#fff" />
+                  <View style={[s.submitIconBox, { backgroundColor: isValid ? 'rgba(255,255,255,0.2)' : '#cbd5e1' }]}>
+                    <Ionicons name="alert-circle-outline" size={15} color={isValid ? '#fff' : '#94a3b8'} />
+                  </View>
+                  <Text style={[s.submitText, !isValid && { color: '#94a3b8' }]}>
+                    Submit Emergency Request
+                  </Text>
+                  <Ionicons name="send" size={13} color={isValid ? '#fff' : '#94a3b8'} />
                 </>
               )}
             </LinearGradient>
@@ -489,25 +498,22 @@ export default function CreateScreen({ navigation }) {
 
       </KeyboardAvoidingView>
 
-      {/* MAP PICKER MODAL */}
+      {/* ══ MAP MODAL ════════════════════════════════════════════════════════ */}
       <Modal visible={showMapModal} animationType="slide" statusBarTranslucent>
-        <View style={styles.mapContainer}>
-          <View style={styles.mapHeader}>
-            <TouchableOpacity
-              style={styles.mapBackBtn}
-              onPress={() => setShowMapModal(false)}
-            >
-              <Ionicons name="arrow-back" size={22} color="#0f172a" />
-            </TouchableOpacity>
-            <Text style={styles.mapTitle}>Pilih Lokasi</Text>
-            <View style={{ width: 36 }} />
-          </View>
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
 
-          {/* SEARCH BAR */}
-          <View style={styles.mapSearchBar}>
+          <LinearGradient colors={['#c0392b', '#e74c3c', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.mapHeader}>
+            <TouchableOpacity style={s.mapBack} onPress={() => setShowMapModal(false)}>
+              <Ionicons name="arrow-back" size={20} color="#fff" />
+            </TouchableOpacity>
+            <Text style={s.mapTitle}>Pilih Lokasi</Text>
+            <View style={{ width: 36 }} />
+          </LinearGradient>
+
+          <View style={s.mapSearch}>
             <Ionicons name="search-outline" size={16} color="#94a3b8" />
             <TextInput
-              style={styles.mapSearchInput}
+              style={s.mapSearchInput}
               placeholder="Cari alamat atau nama tempat..."
               placeholderTextColor="#94a3b8"
               value={searchQuery}
@@ -515,78 +521,70 @@ export default function CreateScreen({ navigation }) {
               onSubmitEditing={handleSearchLocation}
               returnKeyType="search"
             />
-            {searchLoading ? (
-              <ActivityIndicator size="small" color="#3b5fca" />
-            ) : (
-              <TouchableOpacity onPress={handleSearchLocation}>
-                <Ionicons name="arrow-forward-circle" size={24} color="#3b5fca" />
-              </TouchableOpacity>
-            )}
+            {searchLoading
+              ? <ActivityIndicator size="small" color="#ef4444" />
+              : (
+                <TouchableOpacity onPress={handleSearchLocation} style={s.mapSearchGo}>
+                  <LinearGradient colors={['#ef4444', '#f97316']} style={s.mapSearchGoGrad}>
+                    <Ionicons name="arrow-forward" size={14} color="#fff" />
+                  </LinearGradient>
+                </TouchableOpacity>
+              )
+            }
           </View>
 
-          <View style={styles.mapHint}>
-            <Ionicons name="information-circle-outline" size={14} color="#3b5fca" />
-            <Text style={styles.mapHintText}>Tap di peta untuk memilih lokasi</Text>
+          <View style={s.mapHintBar}>
+            <Ionicons name="information-circle-outline" size={13} color="#3b82f6" />
+            <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
           </View>
 
           <MapView
             ref={mapRef}
-            style={styles.map}
+            style={{ flex: 1 }}
             provider={PROVIDER_GOOGLE}
-            initialRegion={{
-              latitude: -6.2088,
-              longitude: 106.8456,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-            }}
+            initialRegion={{ latitude: -6.2088, longitude: 106.8456, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
             onPress={handleMapPress}
             showsUserLocation
-            zoomEnabled
-            scrollEnabled
-            zoomControlEnabled
+            zoomEnabled scrollEnabled zoomControlEnabled
           >
             {pinnedLocation && (
               <Marker coordinate={pinnedLocation}>
-                <View style={styles.pinMarker}>
-                  <Ionicons name="location" size={40} color="#ef4444" />
-                </View>
+                <Ionicons name="location" size={48} color="#ef4444" />
               </Marker>
             )}
           </MapView>
 
-          <View style={styles.mapBottom}>
+          <View style={[s.mapBottom, { paddingBottom: insets.bottom + 16 }]}>
             {mapLoading ? (
-              <View style={styles.mapLoading}>
-                <ActivityIndicator size="small" color="#3b5fca" />
-                <Text style={styles.mapLoadingText}>Mendeteksi alamat...</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
+                <ActivityIndicator size="small" color="#ef4444" />
+                <Text style={{ color: '#64748b', fontSize: 13 }}>Mendeteksi alamat...</Text>
               </View>
             ) : pinnedLocation ? (
-              <View>
-                <View style={styles.mapAddressRow}>
-                  <Ionicons name="location" size={16} color="#3b5fca" />
-                  <Text style={styles.mapAddress} numberOfLines={2}>
+              <>
+                <View style={s.mapAddr}>
+                  <LinearGradient colors={['#fef2f2', '#fee2e2']} style={s.mapAddrIcon}>
+                    <Ionicons name="location" size={16} color="#ef4444" />
+                  </LinearGradient>
+                  <Text style={s.mapAddrText} numberOfLines={2}>
                     {form.address || 'Alamat terdeteksi...'}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setShowMapModal(false)}>
-                  <LinearGradient
-                    colors={['#ef4444', '#f97316']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.mapConfirmGradient}
-                  >
+                <TouchableOpacity onPress={() => setShowMapModal(false)} activeOpacity={0.85}>
+                  <LinearGradient colors={['#c0392b', '#e74c3c', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.mapConfirm}>
                     <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                    <Text style={styles.mapConfirmText}>Konfirmasi Lokasi</Text>
+                    <Text style={s.mapConfirmText}>Konfirmasi Lokasi Ini</Text>
                   </LinearGradient>
                 </TouchableOpacity>
-              </View>
+              </>
             ) : (
-              <View style={styles.mapEmpty}>
-                <Ionicons name="hand-left-outline" size={24} color="#94a3b8" />
-                <Text style={styles.mapEmptyText}>Tap di peta untuk memilih lokasi</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
+                <Ionicons name="hand-left-outline" size={22} color="#cbd5e1" />
+                <Text style={{ color: '#94a3b8', fontSize: 13 }}>Tap di peta untuk memilih lokasi</Text>
               </View>
             )}
           </View>
+
         </View>
       </Modal>
 
@@ -594,286 +592,222 @@ export default function CreateScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f8fafc' },
+function Label({ icon, text, required, hint }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 6 }}>
+      <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={16} color="#ef4444" />
+      </View>
+      <Text style={s.labelText}>
+        {text}
+        {required && <Text style={{ color: '#ef4444' }}> *</Text>}
+      </Text>
+      {hint && <Text style={s.labelHint}>{hint}</Text>}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  safe:  { flex: 1, backgroundColor: '#f1f5f9' },
   scroll: { flex: 1 },
 
-  // Success
-  successContainer: { flex: 1 },
-  successGradient: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  successIconWrap: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  // ── SUCCESS ──────────────────────────────────────────────────────────────
+  successRing: {
+    width: 140, height: 140, borderRadius: 70,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 28,
   },
-  successTitle: { fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 12 },
-  successDesc: { fontSize: 15, color: 'rgba(255,255,255,0.85)', textAlign: 'center', lineHeight: 22 },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-
-  // Section
-  section: { paddingHorizontal: 16, paddingTop: 20 },
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginBottom: 10 },
-  sectionHint: { fontSize: 12, color: '#94a3b8', marginBottom: 10, marginTop: -6 },
-  required: { color: '#ef4444' },
-
-  // Location
-  locationCard: {
+  successCircle: {
+    width: 104, height: 104, borderRadius: 52,
     backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
-    gap: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
-  locationLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  locationIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#eff6ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationTitle: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  locationSubtitle: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  locationBtns: { flexDirection: 'row', gap: 8 },
-  locationBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    borderRadius: 10,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  locationBtnText: { fontSize: 12, fontWeight: '600', color: '#3b5fca' },
+  successTitle: { fontSize: 26, fontWeight: '800', color: '#fff', marginBottom: 10 },
+  successSub:   { fontSize: 14, color: 'rgba(255,255,255,0.85)', textAlign: 'center', lineHeight: 22 },
 
-  // Category
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  categoryCard: {
-    width: '30%',
-    aspectRatio: 1,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // ── HERO HEADER ──────────────────────────────────────────────────────────
+  hero: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, overflow: 'hidden' },
+  decCircle: { position: 'absolute', borderRadius: 999, backgroundColor: '#fff' },
+  heroContent: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  heroIconWrap: {
+    width: 38, height: 38, borderRadius: 12,
     backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    position: 'relative',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#ef4444', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3,
   },
-  categoryEmoji: { fontSize: 28, marginBottom: 6 },
-  categoryLabel: { fontSize: 12, fontWeight: '700' },
-  categoryCheck: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroTitle: { fontSize: 17, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  heroSub:   { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
+  stepRow: { flexDirection: 'row', gap: 6 },
+  stepChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4,
   },
+  stepChipDone: { backgroundColor: 'rgba(255,255,255,0.35)' },
+  stepDot:  { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)' },
+  stepLabel: { fontSize: 10, fontWeight: '700', color: '#fff' },
 
-  // Number
-  numberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    gap: 10,
-  },
-  numberIconWrap: { padding: 4 },
-  numberInput: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0f172a', paddingVertical: 12 },
-  numberStepper: { flexDirection: 'row', gap: 4 },
-  stepperBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // ── SECTION ──────────────────────────────────────────────────────────────
+  section:   { paddingHorizontal: 16, paddingTop: 14 },
+  labelText: { fontSize: 13, fontWeight: '700', color: '#0f172a', flex: 1 },
+  labelHint: { fontSize: 11, color: '#94a3b8' },
 
-  // Text Area
-  textAreaWrap: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 14,
-    minHeight: 130,
+  // ── CARD ─────────────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 12,
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 8, elevation: 2,
   },
-  textArea: { fontSize: 14, color: '#0f172a', lineHeight: 20, minHeight: 80 },
-  charCount: { fontSize: 11, color: '#94a3b8', textAlign: 'right', marginTop: 8 },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 10 },
 
-  // Photos
-  photosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  photoWrap: { position: 'relative', width: 80, height: 80 },
-  photoThumb: { width: 80, height: 80, borderRadius: 12, backgroundColor: '#f1f5f9' },
-  photoUploadingOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // ── LOCATION ─────────────────────────────────────────────────────────────
+  locDisplay: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  locDisplayIcon: {
+    width: 34, height: 34, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
-  photoRemoveBtn: { position: 'absolute', top: -6, right: -6 },
-  addPhotoBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: '#eff6ff',
-    borderWidth: 2,
-    borderColor: '#bfdbfe',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+  locDisplayTitle: { fontSize: 12, fontWeight: '600', color: '#0f172a', lineHeight: 17 },
+  locDisplaySub:   { fontSize: 11, color: '#94a3b8', marginTop: 2 },
+  locBtns: { flexDirection: 'row', gap: 8 },
+  locBtn:        { flex: 1, borderRadius: 10, overflow: 'hidden' },
+  locBtnGrad:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9 },
+  locBtnText:    { fontSize: 12, fontWeight: '700', color: '#fff' },
+  locBtnOutline: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    borderRadius: 10, paddingVertical: 9,
+    borderWidth: 1.5, borderColor: '#ddd6fe', backgroundColor: '#faf5ff',
   },
-  addPhotoBtnText: { fontSize: 10, fontWeight: '600', color: '#3b5fca', textAlign: 'center' },
+  locBtnOutlineText: { fontSize: 12, fontWeight: '700', color: '#8b5cf6' },
 
-  // Submit
-  submitContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#f8fafc',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+  // ── CATEGORY ─────────────────────────────────────────────────────────────
+  catRow: { gap: 8, paddingBottom: 2 },
+  catPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 50, backgroundColor: '#f1f5f9',
   },
-  submitBtn: { borderRadius: 16, overflow: 'hidden' },
-  submitBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
+  catPillActive: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 50,
   },
-  submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  catPillText:       { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  catPillTextActive: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
-  // Map Modal
-  mapContainer: { flex: 1, backgroundColor: '#fff' },
+  // ── PEOPLE COUNTER ────────────────────────────────────────────────────────
+  peopleCounter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  counterBtn:    { borderRadius: 12, overflow: 'hidden' },
+  counterBtnGrad: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  counterDisplay: { alignItems: 'center' },
+  counterNum:    { fontSize: 28, fontWeight: '800', color: '#0f172a', minWidth: 70, paddingVertical: 0 },
+  counterUnit:   { fontSize: 11, color: '#94a3b8', fontWeight: '600', marginTop: -2 },
+  quickPick: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  quickPickLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '600' },
+  quickNum: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+    backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0',
+  },
+  quickNumActive: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
+  quickNumText:   { fontSize: 12, fontWeight: '700', color: '#64748b' },
+
+  // ── DESCRIPTION ──────────────────────────────────────────────────────────
+  textarea: {
+    fontSize: 13, color: '#0f172a', lineHeight: 20,
+    minHeight: 90, textAlignVertical: 'top',
+  },
+  charRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  charTrack: { flex: 1, height: 3, backgroundColor: '#f1f5f9', borderRadius: 2, overflow: 'hidden' },
+  charFill:  { height: '100%', borderRadius: 2 },
+  charCount: { fontSize: 10, color: '#94a3b8', width: 40, textAlign: 'right' },
+
+  // ── PHOTOS ───────────────────────────────────────────────────────────────
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  photoWrap: { width: 68, height: 68, position: 'relative' },
+  photoImg:  { width: 68, height: 68, borderRadius: 12, backgroundColor: '#f1f5f9' },
+  photoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  photoRemove:    { position: 'absolute', top: -4, right: -4 },
+  photoRemoveBtn: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+  addPhoto: { width: 68, height: 68, borderRadius: 12, overflow: 'hidden' },
+  addPhotoInner: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2,
+    borderRadius: 12, borderWidth: 2, borderColor: '#bfdbfe', borderStyle: 'dashed',
+  },
+  addPhotoText: { fontSize: 9, fontWeight: '700', color: '#3b82f6', textAlign: 'center' },
+  photoHint: { fontSize: 11, color: '#94a3b8', flex: 1, paddingLeft: 4 },
+
+  // ── SUBMIT BAR ────────────────────────────────────────────────────────────
+  submitBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 16, paddingTop: 12,
+    backgroundColor: 'rgba(241,245,249,0.97)',
+    borderTopWidth: 1, borderTopColor: '#e2e8f0',
+  },
+  validHint: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 8 },
+  validHintText: { fontSize: 12, color: '#f97316', fontWeight: '500' },
+  submitBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, borderRadius: 14, paddingVertical: 13,
+    shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+  },
+  submitIconBox: {
+    width: 24, height: 24, borderRadius: 7,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  submitText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // ── MAP MODAL ─────────────────────────────────────────────────────────────
   mapHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 16,
   },
-  mapBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
+  mapBack: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  mapTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
-  mapSearchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+  mapTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  mapSearch: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    margin: 12, backgroundColor: '#f8fafc',
+    borderRadius: 14, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: '#e2e8f0',
   },
-  mapSearchInput: { flex: 1, fontSize: 14, color: '#0f172a', paddingVertical: 8 },
-  mapHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  mapSearchInput: { flex: 1, fontSize: 14, color: '#0f172a', paddingVertical: 12 },
+  mapSearchGo:    { overflow: 'hidden', borderRadius: 8 },
+  mapSearchGoGrad: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  mapHintBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#eff6ff', paddingHorizontal: 16, paddingVertical: 8,
   },
-  mapHintText: { fontSize: 12, color: '#3b5fca', fontWeight: '600' },
-  map: { flex: 1 },
-  pinMarker: { alignItems: 'center', justifyContent: 'center' },
+  mapHintText: { fontSize: 12, color: '#3b82f6', fontWeight: '600' },
   mapBottom: {
     backgroundColor: '#fff',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    elevation: 8,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 12,
   },
-  mapLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
+  mapAddr: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fef2f2', borderRadius: 14, padding: 12, marginBottom: 12,
   },
-  mapLoadingText: { fontSize: 14, color: '#64748b' },
-  mapAddressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 12,
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 12,
+  mapAddrIcon: {
+    width: 34, height: 34, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
-  mapAddress: { fontSize: 13, color: '#0f172a', flex: 1, lineHeight: 18 },
-  mapConfirmGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-    borderRadius: 14,
+  mapAddrText: { fontSize: 13, color: '#0f172a', flex: 1, lineHeight: 18, fontWeight: '500' },
+  mapConfirm: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, borderRadius: 16, paddingVertical: 16,
+    shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
   mapConfirmText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  mapEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-  },
-  mapEmptyText: { fontSize: 13, color: '#94a3b8' },
 });
