@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
+
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
@@ -19,6 +21,21 @@ import { DangerZonesModule } from './danger-zones/danger-zones.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const url = new URL(config.get<string>('REDIS_URI')!);
+        return {
+          connection: {
+            host: url.hostname,
+            port: parseInt(url.port, 10),
+            username: url.username || undefined,
+            password: decodeURIComponent(url.password) || undefined,
+            maxRetriesPerRequest: null,
+          },
+        };
+      },
+    }),
     MongoloquentModule.forRoot({
       connection: process.env.MONGO_URI ?? 'mongodb://localhost:27017',
       database: process.env.DB_NAME ?? 'resq-db',

@@ -14,7 +14,7 @@ export interface IRequest {
   category: 'Rescue' | 'Shelter' | 'Food' | 'Medical' | 'Money/Item';
   description: string;
   numberOfPeople: number;
-  urgencyScore: number;
+  urgencyScore: number | null;
   location: {
     type: string;
     coordinates: number[];
@@ -53,8 +53,8 @@ export class Request extends Model<IRequest> {
   @Field(() => Number)
   numberOfPeople: number;
 
-  @Field(() => Number)
-  urgencyScore: number;
+  @Field(() => Number, { nullable: true })
+  urgencyScore: number | null;
 
   @Field(() => GeoPoint)
   location: GeoPoint;

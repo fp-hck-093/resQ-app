@@ -4,8 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { ObjectId } from 'mongodb';
 import { ConfigService } from '@nestjs/config';
+import { URGENCY_QUEUE, SCORE_URGENCY_JOB } from './requests.constants';
 import { Request } from './models/request.model';
 import { VolunteerInfo } from './dto/volunteer-info.output';
 import { CreateRequestInput } from './dto/create-request.input';
@@ -49,6 +52,7 @@ export class RequestsService {
     @InjectModel(EarthquakeAlert)
     private earthquakeModel: typeof EarthquakeAlert,
     @InjectModel(BmkgAlert) private bmkgAlertModel: typeof BmkgAlert,
+    @InjectQueue(URGENCY_QUEUE) private urgencyQueue: Queue,
     private activityLogsService: ActivityLogsService,
     private notificationsService: NotificationsService,
     private usersService: UsersService,
@@ -245,8 +249,6 @@ export class RequestsService {
       );
     }
 
-    const urgencyScore = await this.scoreUrgency(input);
-
     const result = await this.requestModel.create({
       userId: new ObjectId(input.userId ?? ''),
       userName: input.userName ?? '',
@@ -254,14 +256,33 @@ export class RequestsService {
       category: input.category,
       description: input.description,
       numberOfPeople: input.numberOfPeople,
-      urgencyScore,
+      urgencyScore: null,
       location: input.location,
       address: input.address,
       photos: input.photos || [],
       status: 'pending',
     });
 
-    return result as unknown as Request;
+    const request = result as unknown as Request;
+
+    await this.urgencyQueue.add(
+      SCORE_URGENCY_JOB,
+      { requestId: request._id.toString(), input },
+      { removeOnComplete: true, removeOnFail: true },
+    );
+
+    return request;
+  }
+
+  async applyUrgencyScore(
+    requestId: string,
+    input: CreateRequestInput,
+  ): Promise<void> {
+    const score = await this.scoreUrgency(input);
+    const request = await this.requestModel.find(requestId);
+    if (request) {
+      await request.fill({ urgencyScore: score }).save();
+    }
   }
 
   async getRequests(filter?: GetRequestsFilterInput): Promise<Request[]> {
