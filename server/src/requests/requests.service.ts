@@ -62,7 +62,7 @@ export class RequestsService {
 
     if (allIds.length === 0) return requests;
 
-    const users = await this.userModel.where('_id', { $in: allIds }).get();
+    const users = await this.userModel.whereIn('_id', allIds).get();
 
     const userMap = new Map(
       (users as unknown as User[]).map((u) => [
@@ -271,34 +271,27 @@ export class RequestsService {
     const hasLocation = latitude !== undefined && longitude !== undefined;
 
     if (hasLocation) {
-      let query = this.requestModel.where('location', {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [longitude, latitude],
-          },
-          $maxDistance: NEARBY_REQUESTS_RADIUS_KM * 1000,
-        },
-      });
+      let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
       if (search)
-        query = query.where('userName', { $regex: search, $options: 'i' });
-      if (category) query = query.where('category', category);
-      if (status) query = query.where('status', status);
-
-      let results = (await query.get()) as unknown as Request[];
-      if (sortBy) {
-        results = results.sort((a, b) => {
-          const aVal = a[sortBy as keyof Request] as number | string;
-          const bVal = b[sortBy as keyof Request] as number | string;
-          return order === 'asc'
-            ? aVal > bVal
-              ? 1
-              : -1
-            : aVal < bVal
-              ? 1
-              : -1;
+        baseQuery = baseQuery.where('userName', {
+          $regex: search,
+          $options: 'i',
         });
-      }
+      if (category) baseQuery = baseQuery.where('category', category);
+      if (status) baseQuery = baseQuery.where('status', status);
+
+      const all = (await baseQuery.get()) as unknown as Request[];
+      const results = all.filter((r) => {
+        const coords = r.location?.coordinates as unknown as
+          | number[]
+          | undefined;
+        if (!coords) return false;
+        const [rLon, rLat] = coords;
+        return (
+          haversineKm(latitude, longitude, rLat, rLon) <=
+          NEARBY_REQUESTS_RADIUS_KM
+        );
+      });
       return this.attachVolunteers(results);
     }
 
