@@ -293,12 +293,19 @@ export class RequestsService {
     const order = (sortOrder ?? 'desc') as 'asc' | 'desc';
     const hasLocation = latitude !== undefined && longitude !== undefined;
 
-    // Build DB query with only exact-match filters (Mongoloquent-safe)
-    let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
-    if (category) baseQuery = baseQuery.where('category', category);
-    if (status) baseQuery = baseQuery.where('status', status);
-
-    let all = (await baseQuery.get()) as unknown as Request[];
+    if (hasLocation) {
+      let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
+      if (search)
+        baseQuery = baseQuery.where('userName', {
+          $regex: search,
+          $options: 'i',
+        });
+      if (category) baseQuery = baseQuery.where('category', category);
+      if (status) {
+        baseQuery = baseQuery.where('status', status);
+      } else {
+        baseQuery = baseQuery.where('status', { $ne: 'completed' });
+      }
 
     // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
     if (search) {
@@ -321,7 +328,30 @@ export class RequestsService {
       });
     }
 
-    return this.attachVolunteers(all);
+    const hasFilters = !!(search || category || status);
+
+    if (!hasFilters) {
+      const results = await this.requestModel
+        .where('status', { $ne: 'completed' })
+        .orderBy(sortBy ?? 'createdAt', order)
+        .get();
+      return results as unknown as Request[];
+    }
+
+    const firstFilter = search
+      ? this.requestModel.where('userName', { $regex: search, $options: 'i' })
+      : category
+        ? this.requestModel.where('category', category)
+        : this.requestModel.where('status', status!);
+
+    let query = firstFilter;
+    if (search && category) query = query.where('category', category);
+    if (search && status) query = query.where('status', status);
+    if (!search && category && status) query = query.where('status', status);
+    if (!status) query = query.where('status', { $ne: 'completed' });
+
+    const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
+    return this.attachVolunteers(results as unknown as Request[]);
   }
 
   async getRequestsForMap(
@@ -337,7 +367,11 @@ export class RequestsService {
       },
     });
 
-    if (status) query = query.where('status', status);
+    if (status) {
+      query = query.where('status', status);
+    } else {
+      query = query.where('status', { $ne: 'completed' });
+    }
     if (category) query = query.where('category', category);
 
     const results = await query.get();
