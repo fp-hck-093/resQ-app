@@ -15,7 +15,15 @@ import { useQuery } from '@apollo/client/react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
+import { useMutation } from '@apollo/client/react';
 import client from '../../config/apollo';
+import { registerForPushNotificationsAsync } from '../../utils/notifications';
+
+const REMOVE_PUSH_TOKEN = gql`
+  mutation RemovePushToken($token: String!) {
+    removePushToken(token: $token)
+  }
+`;
 
 const GET_ME = gql`
   query GetMe {
@@ -52,6 +60,7 @@ export default function ProfileScreen({ navigation }) {
   const { data: meData, loading: meLoading } = useQuery(GET_ME);
   const { data: requestsData } = useQuery(GET_MY_REQUESTS);
   const { data: activitiesData } = useQuery(GET_MY_ACTIVITIES);
+  const [removePushToken] = useMutation(REMOVE_PUSH_TOKEN);
 
   const user = meData?.me;
   const myRequests = requestsData?.getMyRequests || [];
@@ -75,6 +84,14 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleLogout = async () => {
+    try {
+      const pushToken = await registerForPushNotificationsAsync();
+      if (pushToken) {
+        await removePushToken({ variables: { token: pushToken } });
+      }
+    } catch {
+      // best-effort — proceed with logout regardless
+    }
     await SecureStore.deleteItemAsync('access_token');
     clearBrowserCookies();
     await client.clearStore();
