@@ -263,8 +263,8 @@ export default function RequestsScreen() {
   const filtered = data?.getRequests || [];
 
   useEffect(() => {
-    if (selectedRequest && requests.length > 0) {
-      const updated = requests.find((r) => r._id === selectedRequest._id);
+    if (selectedRequest && filtered.length > 0) {
+      const updated = filtered.find((r) => r._id === selectedRequest._id);
       if (updated) setSelectedRequest(updated);
     }
   }, [data]);

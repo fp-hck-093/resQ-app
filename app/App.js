@@ -34,6 +34,7 @@ import ProfileScreen from "./screens/main/ProfileScreen";
 import LocationsScreen from "./screens/main/LocationsScreen";
 import CreateScreen from "./screens/main/CreateScreen";
 import MyRequestsScreen from "./screens/main/MyRequestsScreen";
+import VolunteerHistoryScreen from "./screens/main/VolunteerHistoryScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -220,6 +221,10 @@ export default function App() {
             />
             <Stack.Screen name="Home" component={MainTabs} />
             <Stack.Screen name="MyRequests" component={MyRequestsScreen} />
+            <Stack.Screen
+              name="VolunteerHistory"
+              component={VolunteerHistoryScreen}
+            />
           </Stack.Navigator>
         </NavigationContainer>
         <StatusBar style="auto" />
