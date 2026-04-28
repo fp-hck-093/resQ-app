@@ -1,6 +1,7 @@
 import { Args, Float, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { DangerZonesService } from './danger-zones.service';
 import { DangerZone } from './models/danger-zone.model';
+import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 
 @Resolver()
 export class DangerZonesResolver {
@@ -22,6 +23,17 @@ export class DangerZonesResolver {
       latitude,
       longitude,
       radiusKm,
+    );
+  }
+
+  @Query(() => [EarthquakeAlert])
+  async getEarthquakesNear(
+    @Args('latitude', { type: () => Float }) latitude: number,
+    @Args('longitude', { type: () => Float }) longitude: number,
+  ): Promise<EarthquakeAlert[]> {
+    return await this.dangerZonesService.getEarthquakesNear(
+      latitude,
+      longitude,
     );
   }
 

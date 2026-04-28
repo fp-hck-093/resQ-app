@@ -3,9 +3,9 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectModel } from '@mongoloquent/nestjs';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { InjectDB, InjectModel } from '@mongoloquent/nestjs';
 import { ObjectId } from 'mongodb';
 import { ConfigService } from '@nestjs/config';
 import { URGENCY_QUEUE, SCORE_URGENCY_JOB } from './requests.constants';
@@ -22,6 +22,7 @@ import { User } from '../users/models/user.model';
 import { DangerZone } from '../danger-zones/models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
+import { DB } from 'mongoloquent';
 
 const GEMINI_URGENCY_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
@@ -46,6 +47,7 @@ function haversineKm(
 @Injectable()
 export class RequestsService {
   constructor(
+    @InjectDB() private db: DB,
     @InjectModel(Request) private requestModel: typeof Request,
     @InjectModel(User) private userModel: typeof User,
     @InjectModel(DangerZone) private dangerZoneModel: typeof DangerZone,
@@ -291,18 +293,22 @@ export class RequestsService {
     const order = (sortOrder ?? 'desc') as 'asc' | 'desc';
     const hasLocation = latitude !== undefined && longitude !== undefined;
 
-    if (hasLocation) {
-      let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
-      if (search)
-        baseQuery = baseQuery.where('userName', {
-          $regex: search,
-          $options: 'i',
-        });
-      if (category) baseQuery = baseQuery.where('category', category);
-      if (status) baseQuery = baseQuery.where('status', status);
+    // Build DB query with only exact-match filters (Mongoloquent-safe)
+    let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
+    if (category) baseQuery = baseQuery.where('category', category);
+    if (status) baseQuery = baseQuery.where('status', status);
 
-      const all = (await baseQuery.get()) as unknown as Request[];
-      const results = all.filter((r) => {
+    let all = (await baseQuery.get()) as unknown as Request[];
+
+    // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
+    if (search) {
+      const term = search.toLowerCase();
+      all = all.filter((r) => r.userName?.toLowerCase().includes(term));
+    }
+
+    // Apply location filter in JS
+    if (hasLocation) {
+      all = all.filter((r) => {
         const coords = r.location?.coordinates as unknown as
           | number[]
           | undefined;
@@ -313,31 +319,29 @@ export class RequestsService {
           NEARBY_REQUESTS_RADIUS_KM
         );
       });
-      return this.attachVolunteers(results);
     }
 
-    const hasFilters = !!(search || category || status);
+    return this.attachVolunteers(all);
+  }
 
-    if (!hasFilters) {
-      const results = await this.requestModel
-        .orderBy(sortBy ?? 'createdAt', order)
-        .get();
-      return results as unknown as Request[];
-    }
+  async getRequestsForMap(
+    latitude: number,
+    longitude: number,
+    status?: string,
+    category?: string,
+  ): Promise<Request[]> {
+    let query = this.db.collection('requests').where('location', {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [longitude, latitude] },
+        $maxDistance: NEARBY_REQUESTS_RADIUS_KM * 1000,
+      },
+    });
 
-    const firstFilter = search
-      ? this.requestModel.where('userName', { $regex: search, $options: 'i' })
-      : category
-        ? this.requestModel.where('category', category)
-        : this.requestModel.where('status', status!);
+    if (status) query = query.where('status', status);
+    if (category) query = query.where('category', category);
 
-    let query = firstFilter;
-    if (search && category) query = query.where('category', category);
-    if (search && status) query = query.where('status', status);
-    if (!search && category && status) query = query.where('status', status);
-
-    const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
-    return this.attachVolunteers(results as unknown as Request[]);
+    const results = await query.get();
+    return results as unknown as Request[];
   }
 
   async getRequestsByStatus(status: string): Promise<Request[]> {
@@ -444,8 +448,6 @@ export class RequestsService {
     }
 
     return request;
-    const [withVolunteers] = await this.attachVolunteers([request]);
-    return withVolunteers;
   }
 
   async updateRequestStatus(id: string, userId: string): Promise<Request> {
@@ -493,7 +495,5 @@ export class RequestsService {
     }
 
     return request;
-    const [withVolunteers] = await this.attachVolunteers([request]);
-    return withVolunteers;
   }
 }

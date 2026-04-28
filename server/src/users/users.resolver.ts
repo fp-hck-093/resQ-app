@@ -66,6 +66,16 @@ export class UsersResolver {
   }
 
   @UseGuards(JwtGuard)
+  @Mutation(() => String)
+  async removePushToken(
+    @CurrentUser() user: User,
+    @Args('token') token: string,
+  ): Promise<string> {
+    await this.usersService.removePushToken(user._id, token);
+    return 'Push token removed';
+  }
+
+  @UseGuards(JwtGuard)
   @Mutation(() => User, { nullable: true })
   async updateLocation(
     @CurrentUser() user: User,

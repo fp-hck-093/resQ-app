@@ -11,7 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { gql } from "@apollo/client";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,8 +30,8 @@ const GET_ME = gql`
 `;
 
 const GET_ALL_REQUESTS = gql`
-  query GetRequests {
-    getRequests {
+  query GetRequests($filter: GetRequestsFilterInput) {
+    getRequests(filter: $filter) {
       _id
       category
       description
@@ -120,7 +123,8 @@ const CATEGORIES = ["Rescue", "Shelter", "Food", "Medical", "Money/Item"];
 function getUrgencyConfig(score) {
   if (score === null || score === undefined)
     return { label: "Verifying...", color: "#94a3b8", loading: true };
-  if (score >= 8) return { label: "Critical", color: "#ef4444", loading: false };
+  if (score >= 8)
+    return { label: "Critical", color: "#ef4444", loading: false };
   if (score >= 5) return { label: "High", color: "#f97316", loading: false };
   return { label: "Low", color: "#22c55e", loading: false };
 }
@@ -132,6 +136,11 @@ export default function RequestsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [volunteeredIds, setVolunteeredIds] = useState(new Set());
   const [confirmModal, setConfirmModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   const [form, setForm] = useState({
     description: "",
@@ -142,8 +151,16 @@ export default function RequestsScreen() {
 
   const { data: meData } = useQuery(GET_ME);
   const currentUser = meData?.me;
+  const filter = {
+    ...(search ? { search } : {}),
+    ...(selectedCategory !== "All" ? { category: selectedCategory } : {}),
+    ...(selectedStatus !== "All" ? { status: selectedStatus } : {}),
+    sortBy,
+    sortOrder,
+  };
 
   const { data, loading, refetch } = useQuery(GET_ALL_REQUESTS, {
+    variables: { filter },
     pollInterval: 30000,
   });
 
@@ -243,11 +260,7 @@ export default function RequestsScreen() {
     },
   );
 
-  const requests = data?.getRequests || [];
-  const filtered =
-    selectedCategory === "All"
-      ? requests
-      : requests.filter((r) => r.category === selectedCategory);
+  const filtered = data?.getRequests || [];
 
   useEffect(() => {
     if (selectedRequest && requests.length > 0) {
@@ -345,10 +358,9 @@ export default function RequestsScreen() {
               style={[
                 styles.statusBadge,
                 {
-                  backgroundColor:
-                    STATUS_COLORS[item.status]
-                      ? STATUS_COLORS[item.status] + "20"
-                      : "#f1f5f9",
+                  backgroundColor: STATUS_COLORS[item.status]
+                    ? STATUS_COLORS[item.status] + "20"
+                    : "#f1f5f9",
                 },
               ]}
             >
@@ -377,6 +389,29 @@ export default function RequestsScreen() {
             {filtered.length} request aktif
           </Text>
         </View>
+        <TouchableOpacity
+          style={styles.filterIconBtn}
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Ionicons name="options-outline" size={20} color="#3b5fca" />
+        </TouchableOpacity>
+      </View>
+
+      {/* SEARCH BAR */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search-outline" size={16} color="#94a3b8" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name..."
+          placeholderTextColor="#94a3b8"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search ? (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={16} color="#94a3b8" />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* FILTER TABS */}
@@ -439,7 +474,9 @@ export default function RequestsScreen() {
       {/* DETAIL MODAL */}
       <Modal visible={!!selectedRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+          <View
+            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
+          >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View>
@@ -461,8 +498,8 @@ export default function RequestsScreen() {
                   styles.modalCategoryBadge,
                   {
                     backgroundColor:
-                      (CATEGORY_COLORS[selectedRequest?.category] || "#3b5fca") +
-                      "20",
+                      (CATEGORY_COLORS[selectedRequest?.category] ||
+                        "#3b5fca") + "20",
                   },
                 ]}
               >
@@ -611,10 +648,98 @@ export default function RequestsScreen() {
         </View>
       </Modal>
 
+      {/* SORT & FILTER MODAL */}
+      <Modal visible={showFilterModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter & Sort</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sortLabel}>Status</Text>
+            <View style={styles.sortRow}>
+              {["All", "pending", "in_progress", "completed"].map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.sortChip, selectedStatus === s && styles.sortChipActive]}
+                  onPress={() => setSelectedStatus(s)}
+                >
+                  <Text style={[styles.sortChipText, selectedStatus === s && styles.sortChipTextActive]}>
+                    {s === "All" ? "All" : s.replace("_", " ")}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.sortLabel}>Sort By</Text>
+            <View style={styles.sortRow}>
+              {[
+                { value: "createdAt", label: "Date" },
+                { value: "urgencyScore", label: "Urgency" },
+                { value: "numberOfPeople", label: "People" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.sortChip, sortBy === opt.value && styles.sortChipActive]}
+                  onPress={() => setSortBy(opt.value)}
+                >
+                  <Text style={[styles.sortChipText, sortBy === opt.value && styles.sortChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.sortLabel}>Order</Text>
+            <View style={styles.sortRow}>
+              {[
+                { value: "desc", label: "Newest first" },
+                { value: "asc", label: "Oldest first" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.sortChip, sortOrder === opt.value && styles.sortChipActive]}
+                  onPress={() => setSortOrder(opt.value)}
+                >
+                  <Text style={[styles.sortChipText, sortOrder === opt.value && styles.sortChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.filterActions}>
+              <TouchableOpacity
+                style={styles.resetBtn}
+                onPress={() => {
+                  setSelectedStatus("All");
+                  setSortBy("createdAt");
+                  setSortOrder("desc");
+                }}
+              >
+                <Text style={styles.resetBtnText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyBtn}
+                onPress={() => setShowFilterModal(false)}
+              >
+                <Text style={styles.applyBtnText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* CREATE REQUEST MODAL */}
       <Modal visible={showCreateModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+          <View
+            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Minta Bantuan</Text>
               <TouchableOpacity onPress={() => setShowCreateModal(false)}>
@@ -764,8 +889,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  filterWrapper: { height: 60, backgroundColor: "#fff", justifyContent: "center" },
-  filterContent: { paddingHorizontal: 16, gap: 8, alignItems: "center", flexGrow: 1 },
+  filterWrapper: {
+    height: 60,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+  },
+  filterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: "center",
+    flexGrow: 1,
+  },
   filterChip: {
     paddingHorizontal: 18,
     borderRadius: 20,
@@ -819,7 +953,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   requestCategory: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
-  urgencyBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  urgencyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
   urgencyText: { fontSize: 11, fontWeight: "700" },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   statusText: { fontSize: 11, fontWeight: "700" },
@@ -1041,4 +1182,63 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confirmBtnOkText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  searchInput: { flex: 1, fontSize: 14, color: "#0f172a" },
+
+  sortLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748b",
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  sortRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sortChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#f8fafc",
+  },
+  sortChipActive: { backgroundColor: "#3b5fca", borderColor: "#3b5fca" },
+  sortChipText: { fontSize: 13, color: "#64748b", fontWeight: "600" },
+  sortChipTextActive: { color: "#fff" },
+
+  filterActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+  },
+  resetBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#f8fafc",
+  },
+  resetBtnText: { color: "#64748b", fontWeight: "700", fontSize: 15 },
+  applyBtn: {
+    flex: 1,
+    backgroundColor: "#3b5fca",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  applyBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
