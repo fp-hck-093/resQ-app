@@ -40,8 +40,8 @@ const LOGIN_MUTATION = gql`
 `;
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState("erwind@gmail.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [errors, setErrors] = useState({});

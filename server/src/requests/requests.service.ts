@@ -20,7 +20,6 @@ import { DangerZone } from '../danger-zones/models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
 
-// eslint-disable-next-line max-len
 const GEMINI_URGENCY_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
@@ -420,9 +419,10 @@ export class RequestsService {
 
     // Notify request owner
     const owner = await this.usersService.findById(request.userId.toString());
-    if (owner?.pushToken) {
-      void this.notificationsService.sendToToken(
-        owner.pushToken,
+    const ownerTokens = (owner?.pushTokens as unknown as string[]) ?? [];
+    if (ownerTokens.length > 0) {
+      void this.notificationsService.sendToMany(
+        ownerTokens,
         'Ada yang ingin membantu!',
         `Seseorang telah menerima request ${request.category} kamu.`,
         { requestId },
@@ -466,7 +466,7 @@ export class RequestsService {
       volunteerIds.map((vid) => this.usersService.findById(vid)),
     );
     const tokens = volunteers
-      .map((v) => v?.pushToken)
+      .flatMap((v) => (v?.pushTokens as unknown as string[]) ?? [])
       .filter((t): t is string => !!t);
 
     if (tokens.length > 0) {

@@ -81,7 +81,14 @@ export class UsersService {
   }
 
   async savePushToken(userId: string, token: string): Promise<void> {
-    await this.userModel.where('_id', userId).update({ pushToken: token });
+    const raw = (await this.userModel
+      .where('_id', userId)
+      .first()) as unknown as { pushTokens?: string[] } | null;
+    const current: string[] = raw?.pushTokens ?? [];
+    if (current.includes(token)) return;
+    await this.userModel
+      .where('_id', userId)
+      .update({ pushTokens: [...current, token] });
   }
 
   async updateLocation(
