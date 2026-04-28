@@ -13,12 +13,15 @@ import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
 import { WeatherLog } from '../weather/models/weather-log.model';
 import { Request } from '../requests/models/request.model';
+import { UserLocation } from '../locations/models/locations.model';
+import { User } from '../users/models/user.model';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // eslint-disable-next-line max-len
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
-const NEARBY_KM = 100;
+const NEARBY_KM = 500;
 const REQUEST_DENSITY_RADIUS_KM = 20;
 
 interface GeminiResult {
@@ -87,6 +90,11 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     private weatherLogModel: typeof WeatherLog,
     @InjectModel(Request)
     private requestModel: typeof Request,
+    @InjectModel(UserLocation)
+    private userLocationModel: typeof UserLocation,
+    @InjectModel(User)
+    private userModel: typeof User,
+    private notificationsService: NotificationsService,
     private configService: ConfigService,
   ) {}
 
@@ -220,6 +228,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `[DangerZones] created zone "${zone.title}" from earthquake`,
     );
+    void this.notifyUsersInZone(result as unknown as DangerZone);
     return result as unknown as DangerZone;
   }
 
@@ -315,6 +324,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       `[DangerZones] created ${centroids.length} zone(s)` +
         ` "${zone.title}" from BMKG alert`,
     );
+    if (firstCreated) void this.notifyUsersInZone(firstCreated);
     return firstCreated;
   }
 
@@ -408,12 +418,14 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getActiveDangerZones(): Promise<DangerZone[]> {
-    await this.deactivateExpired();
+    const now = new Date().toISOString();
     const results = await this.dangerZoneModel
       .where('isActive', true)
       .orderBy('createdAt', 'desc')
       .get();
-    return results as unknown as DangerZone[];
+    return (results as unknown as DangerZone[]).filter(
+      (z) => !z.activeUntil || z.activeUntil >= now,
+    );
   }
 
   async getDangerZonesNear(
@@ -427,10 +439,38 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       if (z.activeUntil && z.activeUntil < now) return false;
       const [zLon, zLat] = (z.location as unknown as { coordinates: number[] })
         .coordinates;
-      return (
-        haversineKm(lat, lon, zLat, zLon) <= Math.max(radiusKm, z.radiusKm)
-      );
+      const dist = haversineKm(lat, lon, zLat, zLon);
+      // two circles intersect when distance < sum of both radii
+      return dist <= radiusKm + z.radiusKm;
     });
+  }
+
+  async getDangerZonesForLocations(
+    locations: { latitude: number; longitude: number }[],
+  ): Promise<DangerZone[]> {
+    if (locations.length === 0) return [];
+    const zones = await this.dangerZoneModel.where('isActive', true).get();
+    const now = new Date().toISOString();
+    const seen = new Set<string>();
+    const result: DangerZone[] = [];
+    for (const zone of zones as unknown as DangerZone[]) {
+      if (zone.activeUntil && zone.activeUntil < now) continue;
+      if (!zone.location?.coordinates) continue;
+      const [zLon, zLat] = (
+        zone.location as unknown as { coordinates: number[] }
+      ).coordinates;
+      const id = zone._id.toString();
+      if (seen.has(id)) continue;
+      for (const loc of locations) {
+        const dist = haversineKm(loc.latitude, loc.longitude, zLat, zLon);
+        if (dist <= NEARBY_KM + zone.radiusKm) {
+          seen.add(id);
+          result.push(zone);
+          break;
+        }
+      }
+    }
+    return result;
   }
 
   async triggerAnalysis(): Promise<string> {
@@ -438,7 +478,82 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     return 'Danger zone analysis completed';
   }
 
+  async testPushNotification(pushToken: string): Promise<void> {
+    await this.notificationsService.sendToToken(
+      pushToken,
+      '⚠️ Zona Bahaya Aktif',
+      'Ini adalah test notifikasi zona bahaya dari server.',
+      { screen: 'Home' },
+    );
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  private async notifyUsersInZone(zone: DangerZone): Promise<void> {
+    try {
+      const [zLon, zLat] = (
+        zone.location as unknown as { coordinates: number[] }
+      ).coordinates;
+      this.logger.log(
+        `[Notify] zone "${zone.title}" center=(${zLat},${zLon}) radiusKm=${zone.radiusKm}`,
+      );
+
+      const locations = await this.userLocationModel
+        .where('notifyOnDangerZones', true)
+        .get();
+      this.logger.log(
+        `[Notify] locations with notifyOnDangerZones=true: ${locations.length}`,
+      );
+
+      const affectedUserIds = new Set<string>();
+      for (const loc of locations as unknown as UserLocation[]) {
+        const [lLon, lLat] = (
+          loc.location as unknown as { coordinates: number[] }
+        ).coordinates;
+        const dist = haversineKm(lLat, lLon, zLat, zLon);
+        this.logger.log(
+          `[Notify] location userId=${loc.userId} dist=${dist.toFixed(1)}km vs radiusKm=${zone.radiusKm}`,
+        );
+        if (dist <= zone.radiusKm) {
+          affectedUserIds.add(loc.userId.toString());
+        }
+      }
+      this.logger.log(`[Notify] affected users: ${affectedUserIds.size}`);
+
+      if (affectedUserIds.size === 0) return;
+
+      const tokens: string[] = [];
+      for (const userId of affectedUserIds) {
+        try {
+          const user = await this.userModel.find(userId);
+          const pushTokens = (user as unknown as { pushTokens?: string[] })
+            ?.pushTokens;
+          this.logger.log(
+            `[Notify] user ${userId} pushTokens=${JSON.stringify(pushTokens)}`,
+          );
+          if (pushTokens?.length) tokens.push(...pushTokens);
+        } catch (findErr) {
+          this.logger.warn(`[Notify] find user ${userId} failed: ${findErr}`);
+        }
+      }
+      this.logger.log(`[Notify] total tokens to send: ${tokens.length}`);
+
+      if (tokens.length === 0) return;
+
+      await this.notificationsService.sendToMany(
+        tokens,
+        `⚠️ Zona Bahaya ${zone.level.charAt(0).toUpperCase() + zone.level.slice(1)}`,
+        zone.title,
+        { screen: 'Home', zoneId: zone._id?.toString() },
+      );
+
+      this.logger.log(
+        `[DangerZones] push sent to ${tokens.length} token(s) for zone "${zone.title}"`,
+      );
+    } catch (err) {
+      this.logger.error('[DangerZones] notifyUsersInZone failed', err);
+    }
+  }
 
   private async deactivateExpired(): Promise<void> {
     const now = new Date().toISOString();
