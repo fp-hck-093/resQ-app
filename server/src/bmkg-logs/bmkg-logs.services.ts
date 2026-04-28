@@ -99,10 +99,26 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
 
   private async pollNowcast() {
     try {
+      await this.purgeExpiredAlerts();
       const results = await this.fetchAndStoreNowcastAlerts();
       this.logger.log(`[Nowcast] synced — ${results.length} new alert(s)`);
     } catch (err) {
       this.logger.error('[Nowcast] sync failed', err);
+    }
+  }
+
+  private async purgeExpiredAlerts(): Promise<void> {
+    const cutoff = new Date(Date.now() - 86_400_000).toISOString();
+    const stale = await this.bmkgAlertModel
+      .where('expires', { $lt: cutoff })
+      .get();
+    for (const alert of stale as unknown as BmkgAlert[]) {
+      await this.bmkgAlertModel.destroy(alert._id.toString());
+    }
+    if ((stale as unknown[]).length > 0) {
+      this.logger.log(
+        `[Nowcast] purged ${(stale as unknown[]).length} expired alert(s)`,
+      );
     }
   }
 

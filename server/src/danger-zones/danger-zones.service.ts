@@ -331,12 +331,21 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
 
   private async deactivateExpired(): Promise<void> {
     const now = new Date().toISOString();
-    const zones = await this.dangerZoneModel.where('isActive', true).get();
-    for (const zone of zones as unknown as DangerZone[]) {
+    const active = await this.dangerZoneModel.where('isActive', true).get();
+    for (const zone of active as unknown as DangerZone[]) {
       if (zone.activeUntil && zone.activeUntil < now) {
         const z = await this.dangerZoneModel.find(zone._id.toString());
         if (z) await z.fill({ isActive: false }).save();
       }
+    }
+
+    const purgeCutoff = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const stale = await this.dangerZoneModel
+      .where('isActive', false)
+      .where('activeUntil', { $lt: purgeCutoff })
+      .get();
+    for (const zone of stale as unknown as DangerZone[]) {
+      await this.dangerZoneModel.destroy(zone._id.toString());
     }
   }
 
