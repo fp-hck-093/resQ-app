@@ -48,9 +48,11 @@ const GET_MY_REQUESTS = gql`
 
 const GET_MY_ACTIVITIES = gql`
   query GetMyActivities {
-    getMyActivities {
-      _id
-      status
+    getMyActivityLogs(page: 1, limit: 50) {
+      data {
+        _id
+        status
+      }
     }
   }
 `;
