@@ -4,7 +4,6 @@ import {
   IsString,
   IsNumber,
   Min,
-  Max,
   IsArray,
   IsOptional,
 } from 'class-validator';
@@ -57,13 +56,6 @@ export class CreateRequestInput {
   @IsNotEmpty({ message: 'Number of people is required' })
   @Min(1, { message: 'Number of people must be at least 1' })
   numberOfPeople: number;
-
-  @Field(() => Number)
-  @IsNumber()
-  @IsNotEmpty({ message: 'Urgency score is required' })
-  @Min(0, { message: 'Urgency score must be at least 0' })
-  @Max(10, { message: 'Urgency score must be at most 10' })
-  urgencyScore: number;
 
   @Field(() => LocationInput)
   @IsNotEmpty({ message: 'Location is required' })

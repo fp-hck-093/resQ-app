@@ -72,7 +72,7 @@ GraphQL subscriptions are enabled via `graphql-ws`.
 
 ### ID types
 
-Foreign key fields (`userId`, `volunteerId`, `requestId`, `sourceIds`) are stored as MongoDB `ObjectId`. All IDs arriving from the client (JWT payload, GraphQL args) are strings and converted with `new ObjectId(id)` at the service boundary.
+Foreign key fields (`userId`, `volunteerId`, `requestId`, `volunteerIds`, `sourceIds`) are stored as MongoDB `ObjectId`. All IDs arriving from the client (JWT payload, GraphQL args) are strings and converted with `new ObjectId(id)` at the service boundary.
 
 ---
 
@@ -166,31 +166,62 @@ Defaults: `page = 1`, `limit = 10`.
 | `category` | String | `Rescue \| Shelter \| Food \| Medical \| Money/Item` |
 | `description` | String | |
 | `numberOfPeople` | Number | |
-| `urgencyScore` | Number | AI-calculated by client before submission |
+| `urgencyScore` | Number | calculated server-side by Gemini AI on creation |
 | `location` | GeoPoint | `[longitude, latitude]` |
 | `address` | String | |
 | `photos` | [String]? | Cloudinary URLs |
 | `status` | String | `pending \| in_progress \| completed` |
-| `volunteerIds` | [String]? | IDs of volunteers |
+| `volunteerIds` | [ObjectId]? | IDs of volunteers (stored as ObjectId) |
+| `volunteers` | [VolunteerInfo]? | populated at query time — not stored in DB |
+
+`VolunteerInfo { _id: String!, name: String! }` — batch-fetched and joined server-side on every read.
 
 #### Operations
 
 | Type | Name | Auth | Description |
 |---|---|---|---|
-| Query | `getAllRequests` | — | All requests, newest first |
-| Query | `getRequestsByStatus(status)` | — | Filter by status |
-| Query | `getRequestsByUserId(userId)` | — | All requests by a user |
-| Query | `getMyRequests` | JWT | Shortcut for current user |
+| Query | `getRequests(filter?)` | — | Filterable, sortable list of all requests |
+| Query | `getRequestsByUserId(userId)` | — | All requests by a specific user |
+| Query | `getMyRequests` | JWT | Shortcut for current user's requests |
 | Query | `getRequestById(id)` | — | Single request |
-| Query | `getNearbyRequests(latitude, longitude, status?, category?)` | — | Requests within **10 km** of coordinates |
-| Mutation | `createRequest(input)` | JWT | Creates a pending request |
+| Mutation | `createRequest(input)` | JWT | Creates a pending request; server scores urgency via AI |
 | Mutation | `deleteRequest(id)` | JWT | Owner only; only `pending` requests |
 | Mutation | `volunteerForRequest(requestId)` | JWT | Adds current user as volunteer |
 | Mutation | `completeRequest(id)` | JWT | Owner marks `in_progress` → `completed` |
 
+#### `getRequests` filter input
+
+```graphql
+input GetRequestsFilterInput {
+  search:     String    # case-insensitive match on userName
+  category:   String
+  status:     String
+  sortBy:     String    # any request field, default "createdAt"
+  sortOrder:  String    # "asc" | "desc", default "desc"
+  latitude:   Float     # if provided with longitude, filters to 10 km radius
+  longitude:  Float
+}
+```
+
+When `latitude` + `longitude` are provided, results are limited to requests within **10 km** (`NEARBY_REQUESTS_RADIUS_KM`). Sorting is applied in-memory for the geo path.
+
+#### `createRequest` input
+
+`urgencyScore` is **not** accepted from the client — the server calculates it. All other fields remain the same.
+
+```graphql
+input CreateRequestInput {
+  userName, userPhone, category, description,
+  numberOfPeople, location, address, photos?
+  # urgencyScore is server-calculated — do not send
+}
+```
+
 #### Business rules
 
 - **Nearby radius** is fixed at 10 km server-side (`NEARBY_REQUESTS_RADIUS_KM`). Clients do not pass a radius.
+- **Urgency scoring** — on `createRequest`, the server calls Gemini AI with: active danger zones overlapping the request location, recent earthquakes (M ≥ 5, last 24 h) within 200 km, active BMKG alerts within 100 km, plus category/description/numberOfPeople. If a photo URL is included, the first image is fetched and passed to Gemini for visual analysis. Returns a score of 1–10. Falls back to a rule-based score (`Rescue/Medical` score higher; danger zone level adds up to +2) if Gemini is unavailable.
+- **Volunteer names** — all request responses include a `volunteers` field with `[{ _id, name }]` batch-fetched from the users collection. The raw `volunteerIds` array (ObjectId) is also present.
 - `deleteRequest` — only the owner can delete; only `pending` status is allowed.
 - `volunteerForRequest` — the request owner cannot volunteer for their own request. Duplicate volunteers are rejected. First volunteer transitions status `pending → in_progress`. Further volunteers can still join while `in_progress`. Creates an `ActivityLog` entry.
 - `completeRequest` — owner only; only `in_progress → completed`.
@@ -496,13 +527,24 @@ GraphQL errors are normalised:
 
 ## Key Data Flows
 
+### Creating a request with AI urgency scoring
+
+1. Client uploads photo (optional) via `POST /upload/request-photo` → gets Cloudinary URL
+2. Client calls `createRequest(input)` — **no urgencyScore in input**
+3. Server queries active danger zones, recent earthquakes, BMKG alerts near the request location
+4. Builds Gemini prompt with location context + request details + optional photo (base64)
+5. Gemini returns `{ score: 1–10, rationale }` → stored as `urgencyScore`
+6. If Gemini fails: rule-based fallback (category weight + danger zone bonus)
+7. Request stored with server-calculated `urgencyScore`
+
 ### User volunteers for a request
 
 1. `volunteerForRequest(requestId)` — JWT required
 2. Server validates: not own request, not already volunteered, not completed
-3. Volunteer's ID appended to `request.volunteerIds`
+3. Volunteer's `ObjectId` appended to `request.volunteerIds`
 4. If first volunteer: `status` transitions `pending → in_progress`
 5. `ActivityLog` entry created with `status: active`
+6. Response includes `volunteers: [{ _id, name }]` batch-fetched from users
 
 ### Danger zone lifecycle
 
