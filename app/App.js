@@ -33,6 +33,7 @@ import ActivityScreen from "./screens/main/ActivityScreen";
 import ProfileScreen from "./screens/main/ProfileScreen";
 import LocationsScreen from "./screens/main/LocationsScreen";
 import CreateScreen from "./screens/main/CreateScreen";
+import MyRequestsScreen from "./screens/main/MyRequestsScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -218,6 +219,7 @@ export default function App() {
               component={ResetPasswordScreen}
             />
             <Stack.Screen name="Home" component={MainTabs} />
+            <Stack.Screen name="MyRequests" component={MyRequestsScreen} />
           </Stack.Navigator>
         </NavigationContainer>
         <StatusBar style="auto" />

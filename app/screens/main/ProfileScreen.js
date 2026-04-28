@@ -147,7 +147,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.menuCard}>
             <TouchableOpacity
               style={[styles.menuItem, styles.menuItemBorder]}
-              onPress={() => navigation.navigate('Activity')}
+              onPress={() => navigation.navigate('MyRequests')}
             >
               <View style={styles.menuItemLeft}>
                 <View style={[styles.menuIconWrap, { backgroundColor: '#eff6ff' }]}>
