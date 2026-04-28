@@ -19,7 +19,7 @@ import { gql } from "@apollo/client";
 import { useQuery } from "@apollo/client/react";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width, height } = Dimensions.get("window");
 
@@ -83,6 +83,7 @@ const STATUS_CONFIG = {
 };
 
 export default function HomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const fullMapRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -298,7 +299,7 @@ export default function HomeScreen({ navigation }) {
 
 
       {/* ── MAP CONTROLS (kanan bawah) ── */}
-      <View style={styles.mapControls}>
+      <View style={[styles.mapControls, { bottom: 180 + insets.bottom }]}>
         <TouchableOpacity style={styles.mapControlBtn} onPress={handleLocate}>
           <Ionicons name="locate" size={18} color="#3b5fca" />
         </TouchableOpacity>
@@ -315,7 +316,7 @@ export default function HomeScreen({ navigation }) {
         <Animated.View
           style={[
             styles.requestCard,
-            { transform: [{ translateY: slideAnim }] },
+            { transform: [{ translateY: slideAnim }], bottom: 75 + insets.bottom },
           ]}
         >
           <View style={styles.requestCardHandle} />
@@ -555,7 +556,6 @@ const styles = StyleSheet.create({
   mapControls: {
     position: "absolute",
     right: 16,
-    bottom: 180,
     gap: 8,
     zIndex: 5,
   },
@@ -687,7 +687,6 @@ const styles = StyleSheet.create({
   // Request Card
   requestCard: {
     position: "absolute",
-    bottom: 75,
     left: 16,
     right: 16,
     backgroundColor: "#fff",

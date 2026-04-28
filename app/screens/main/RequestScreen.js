@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { gql } from "@apollo/client";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
@@ -86,6 +86,7 @@ function getUrgencyConfig(score) {
 }
 
 export default function RequestsScreen() {
+  const insets = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -236,12 +237,6 @@ export default function RequestsScreen() {
             {filtered.length} request aktif
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.filterIconBtn}
-          onPress={() => setShowCreateModal(true)}
-        >
-          <Ionicons name="add-outline" size={22} color="#3b5fca" />
-        </TouchableOpacity>
       </View>
 
       {/* FILTER TABS */}
@@ -303,7 +298,7 @@ export default function RequestsScreen() {
       {/* DETAIL MODAL */}
       <Modal visible={!!selectedRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View>
@@ -398,7 +393,7 @@ export default function RequestsScreen() {
       {/* CREATE REQUEST MODAL */}
       <Modal visible={showCreateModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Minta Bantuan</Text>
               <TouchableOpacity onPress={() => setShowCreateModal(false)}>
