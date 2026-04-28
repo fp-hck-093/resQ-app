@@ -196,7 +196,7 @@ export default function ProfileScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => navigation.navigate("Activity")}
+              onPress={() => navigation.navigate("VolunteerHistory")}
             >
               <View style={styles.menuItemLeft}>
                 <View
