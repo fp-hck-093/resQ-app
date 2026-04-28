@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -46,6 +47,17 @@ const GET_ALL_REQUESTS = gql`
       location {
         type
         coordinates
+      }
+    }
+  }
+`;
+
+const GET_MY_ACTIVITY_LOGS = gql`
+  query GetMyActivityLogs {
+    getMyActivityLogs(page: 1, limit: 100) {
+      data {
+        requestId
+        status
       }
     }
   }
@@ -132,10 +144,12 @@ function getUrgencyConfig(score) {
 
 export default function RequestsScreen() {
   const insets = useSafeAreaInsets();
+  const bottomSafe = Math.max(insets.bottom, 36);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [volunteeredIds, setVolunteeredIds] = useState(new Set());
+  const [myCompletedIds, setMyCompletedIds] = useState(new Set());
   const [confirmModal, setConfirmModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -164,6 +178,9 @@ export default function RequestsScreen() {
     variables: { filter },
     pollInterval: 30000,
   });
+  const { data: activityData, refetch: refetchActivities } = useQuery(
+    GET_MY_ACTIVITY_LOGS,
+  );
 
   const [volunteerForRequest, { loading: volunteerLoading }] = useMutation(
     VOLUNTEER_FOR_REQUEST,
@@ -188,17 +205,28 @@ export default function RequestsScreen() {
 
   const handleCompleteVolunteer = () => {
     const rid = selectedRequest._id;
+    setMyCompletedIds((prev) => new Set([...prev, rid]));
     updateActivityStatus({
       variables: { requestId: rid, status: "COMPLETED" },
       onCompleted: () => {
         refetch();
-        setSelectedRequest((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "completed",
-              }
-            : prev,
+        refetchActivities();
+      },
+      onError: (error) => {
+        if (error.message?.includes("completed activity")) {
+          setMyCompletedIds((prev) => new Set([...prev, rid]));
+          refetchActivities();
+          return;
+        }
+
+        setMyCompletedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        Alert.alert(
+          "Gagal",
+          error.message || "Tidak bisa menandai bantuan sebagai selesai.",
         );
       },
     });
@@ -210,7 +238,13 @@ export default function RequestsScreen() {
       variables: { requestId: rid, status: "CANCELLED" },
       onCompleted: () => {
         refetch();
+        refetchActivities();
         setVolunteeredIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        setMyCompletedIds((prev) => {
           const next = new Set(prev);
           next.delete(rid);
           return next;
@@ -262,6 +296,12 @@ export default function RequestsScreen() {
   );
 
   const filtered = data?.getRequests || [];
+  const completedActivityIds = new Set([
+    ...myCompletedIds,
+    ...((activityData?.getMyActivityLogs?.data || [])
+      .filter((activity) => activity.status?.toLowerCase() === "completed")
+      .map((activity) => activity.requestId)),
+  ]);
 
   useEffect(() => {
     if (selectedRequest && filtered.length > 0) {
@@ -476,7 +516,7 @@ export default function RequestsScreen() {
       <Modal visible={!!selectedRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View
-            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
+            style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
@@ -612,6 +652,16 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Volunteer — already completed their part
+              if (completedActivityIds.has(selectedRequest?._id)) {
+                return (
+                  <View style={styles.ownerCompletedBadge}>
+                    <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                    <Text style={styles.ownerCompletedText}>Terima kasih telah membantu</Text>
+                  </View>
+                );
+              }
+
               // Volunteer — not yet joined
               if (!isVolunteered) {
                 return (
@@ -675,7 +725,7 @@ export default function RequestsScreen() {
       {/* SORT & FILTER MODAL */}
       <Modal visible={showFilterModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+          <View style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filter & Sort</Text>
@@ -762,7 +812,7 @@ export default function RequestsScreen() {
       <Modal visible={showCreateModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View
-            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
+            style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Minta Bantuan</Text>

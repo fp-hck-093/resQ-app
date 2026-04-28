@@ -78,12 +78,20 @@ export class ActivityLogsService {
     const currentStatus = exists.status;
 
     if (currentStatus === ActivityLogStatus.COMPLETED) {
+      if (status === ActivityLogStatus.COMPLETED) {
+        return exists as unknown as ActivityLog;
+      }
+
       throw new BadRequestException(
         'Cannot change status of a completed activity',
       );
     }
 
     if (currentStatus === ActivityLogStatus.CANCELLED) {
+      if (status === ActivityLogStatus.CANCELLED) {
+        return exists as unknown as ActivityLog;
+      }
+
       throw new BadRequestException(
         'Cannot change status of a cancelled activity',
       );
@@ -93,10 +101,6 @@ export class ActivityLogsService {
       .where('volunteerId', vId)
       .where('requestId', rId)
       .update({ status });
-
-    if (status === ActivityLogStatus.COMPLETED) {
-      await request.fill({ status: 'completed' }).save();
-    }
 
     if (status === ActivityLogStatus.CANCELLED) {
       const volunteerIds: ObjectId[] =
@@ -155,7 +159,7 @@ export class ActivityLogsService {
 
     const requestDocs =
       requestIds.length > 0
-        ? await this.requestModel.where('_id', { $in: requestIds }).get()
+        ? await this.requestModel.whereIn('_id', requestIds).get()
         : [];
 
     const requestMap = new Map(

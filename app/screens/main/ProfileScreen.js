@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -12,11 +11,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { gql } from "@apollo/client";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 import * as SecureStore from "expo-secure-store";
 import * as ImagePicker from "expo-image-picker";
 import client from "../../config/apollo";
@@ -78,8 +81,16 @@ const GET_MY_ACTIVITIES = gql`
 `;
 
 export default function ProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const bottomSafe = Math.max(insets.bottom, 36);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    type: "info",
+  });
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -98,8 +109,15 @@ export default function ProfileScreen({ navigation }) {
     loading: meLoading,
     refetch: refetchMe,
   } = useQuery(GET_ME);
-  const { data: requestsData } = useQuery(GET_MY_REQUESTS);
-  const { data: activitiesData } = useQuery(GET_MY_ACTIVITIES);
+  const { data: requestsData, refetch: refetchRequests } =
+    useQuery(GET_MY_REQUESTS);
+  const { data: activitiesData, refetch: refetchActivities } = useQuery(
+    GET_MY_ACTIVITIES,
+    {
+      fetchPolicy: "network-only",
+      notifyOnNetworkStatusChange: true,
+    },
+  );
   const [removePushToken] = useMutation(REMOVE_PUSH_TOKEN);
 
   const [updateUser] = useMutation(UPDATE_USER, {
@@ -114,7 +132,12 @@ export default function ProfileScreen({ navigation }) {
     CHANGE_PASSWORD,
     {
       onCompleted: () => {
-        Alert.alert("Berhasil! 🎉", "Password berhasil diubah!");
+        setFeedbackModal({
+          visible: true,
+          title: "Berhasil",
+          message: "Password berhasil diubah!",
+          type: "success",
+        });
         setShowPasswordModal(false);
         setPasswordForm({
           currentPassword: "",
@@ -123,7 +146,12 @@ export default function ProfileScreen({ navigation }) {
         });
       },
       onError: (e) =>
-        Alert.alert("Gagal", e.message || "Password lama tidak sesuai!"),
+        setFeedbackModal({
+          visible: true,
+          title: "Gagal",
+          message: e.message || "Password lama tidak sesuai!",
+          type: "error",
+        }),
     },
   );
 
@@ -131,11 +159,18 @@ export default function ProfileScreen({ navigation }) {
   const myRequests = requestsData?.getMyRequests || [];
   const myActivities = activitiesData?.getMyActivityLogs?.data || [];
   const helpedCount = myActivities.filter(
-    (a) => a.status === "completed",
+    (a) => a.status?.toLowerCase() === "completed",
   ).length;
   const pendingRequests = myRequests.filter(
     (r) => r.status === "pending",
   ).length;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refetchRequests();
+      refetchActivities();
+    }, [refetchRequests, refetchActivities]),
+  );
 
   const clearBrowserCookies = () => {
     if (typeof document === "undefined") return;
@@ -236,15 +271,30 @@ export default function ProfileScreen({ navigation }) {
       !passwordForm.newPassword ||
       !passwordForm.confirmPassword
     ) {
-      Alert.alert("Error", "Semua field harus diisi!");
+      setFeedbackModal({
+        visible: true,
+        title: "Error",
+        message: "Semua field harus diisi!",
+        type: "error",
+      });
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      Alert.alert("Error", "Password baru tidak cocok!");
+      setFeedbackModal({
+        visible: true,
+        title: "Error",
+        message: "Password baru tidak cocok!",
+        type: "error",
+      });
       return;
     }
     if (passwordForm.newPassword.length < 5) {
-      Alert.alert("Error", "Password baru minimal 5 karakter!");
+      setFeedbackModal({
+        visible: true,
+        title: "Error",
+        message: "Password baru minimal 5 karakter!",
+        type: "error",
+      });
       return;
     }
     changePassword({
@@ -593,7 +643,12 @@ export default function ProfileScreen({ navigation }) {
       {/* CHANGE PASSWORD MODAL */}
       <Modal visible={showPasswordModal} animationType="slide" transparent>
         <View style={styles.editModalOverlay}>
-          <View style={styles.editModalContent}>
+          <View
+            style={[
+              styles.editModalContent,
+              { paddingBottom: bottomSafe + 20 },
+            ]}
+          >
             <View style={styles.modalHandle} />
             <View style={styles.editModalHeader}>
               <Text style={styles.editModalTitle}>Change Password</Text>
@@ -731,6 +786,49 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* FEEDBACK MODAL */}
+      <Modal transparent visible={feedbackModal.visible} animationType="fade">
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setFeedbackModal({ ...feedbackModal, visible: false })}
+        >
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View
+              style={[
+                styles.modalIconWrap,
+                {
+                  backgroundColor:
+                    feedbackModal.type === "success" ? "#f0fdf4" : "#fef2f2",
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  feedbackModal.type === "success"
+                    ? "checkmark-circle-outline"
+                    : "alert-circle-outline"
+                }
+                size={32}
+                color={feedbackModal.type === "success" ? "#22c55e" : "#ef4444"}
+              />
+            </View>
+            <Text style={styles.modalTitle}>{feedbackModal.title}</Text>
+            <Text style={styles.modalMessage}>{feedbackModal.message}</Text>
+            <TouchableOpacity
+              style={[
+                styles.feedbackBtn,
+                feedbackModal.type === "success" && { backgroundColor: "#22c55e" },
+              ]}
+              onPress={() =>
+                setFeedbackModal({ ...feedbackModal, visible: false })
+              }
+            >
+              <Text style={styles.feedbackBtnText}>OK</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -1057,6 +1155,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalBtnConfirmText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  feedbackBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+  },
+  feedbackBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 
   // Change Password Modal
   editModalOverlay: {
