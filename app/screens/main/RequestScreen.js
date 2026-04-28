@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { gql } from "@apollo/client";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 
 const GET_ALL_REQUESTS = gql`
   query GetRequests {
@@ -44,6 +45,8 @@ const CREATE_REQUEST = gql`
     }
   }
 `;
+
+const DEFAULT_LOCATION = { type: "Point", coordinates: [0, 0] };
 
 const VOLUNTEER_FOR_REQUEST = gql`
   mutation VolunteerForRequest($requestId: String!) {
@@ -133,7 +136,21 @@ export default function RequestsScreen() {
       ? requests
       : requests.filter((r) => r.category === selectedCategory);
 
-  const handleCreateRequest = () => {
+  const handleCreateRequest = async () => {
+    let location = DEFAULT_LOCATION;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const pos = await Location.getCurrentPositionAsync({});
+        location = {
+          type: "Point",
+          coordinates: [pos.coords.longitude, pos.coords.latitude],
+        };
+      }
+    } catch {
+      // use default location if GPS fails
+    }
+
     createRequest({
       variables: {
         input: {
@@ -141,6 +158,7 @@ export default function RequestsScreen() {
           category: form.category,
           numberOfPeople: parseInt(form.numberOfPeople),
           address: form.address,
+          location,
         },
       },
     });
@@ -476,7 +494,7 @@ export default function RequestsScreen() {
 
             <TouchableOpacity
               style={[styles.submitBtn, createLoading && { opacity: 0.7 }]}
-              onPress={handleCreateRequest}
+              onPress={() => void handleCreateRequest()}
               disabled={createLoading}
             >
               {createLoading ? (

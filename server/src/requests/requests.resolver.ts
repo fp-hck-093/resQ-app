@@ -19,6 +19,8 @@ export class RequestsResolver {
     @CurrentUser() currentUser: User,
   ): Promise<Request> {
     input.userId = currentUser._id.toString();
+    input.userName = currentUser.name;
+    input.userPhone = currentUser.phone;
     return this.requestsService.createRequest(input);
   }
 
