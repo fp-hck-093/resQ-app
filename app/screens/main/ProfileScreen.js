@@ -15,6 +15,7 @@ import { useQuery } from '@apollo/client/react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
+import client from '../../config/apollo';
 
 const GET_ME = gql`
   query GetMe {
@@ -58,8 +59,25 @@ export default function ProfileScreen({ navigation }) {
   const helpedCount = myActivities.filter(a => a.status === 'completed').length;
   const pendingRequests = myRequests.filter(r => r.status === 'pending').length;
 
+  const clearBrowserCookies = () => {
+    if (typeof document === 'undefined') return;
+
+    document.cookie.split(';').forEach((cookie) => {
+      const [cookieName] = cookie.split('=');
+      const name = cookieName.trim();
+
+      if (!name) return;
+
+      const expires = 'Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = `${name}=; expires=${expires}; path=/`;
+      document.cookie = `${name}=; expires=${expires}; path=/; domain=${window.location.hostname}`;
+    });
+  };
+
   const handleLogout = async () => {
     await SecureStore.deleteItemAsync('access_token');
+    clearBrowserCookies();
+    await client.clearStore();
     navigation.replace('Login');
   };
 
