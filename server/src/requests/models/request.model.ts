@@ -1,8 +1,9 @@
-// server/src/requests/models/request.model.ts
 import { Field, ID, ObjectType } from '@nestjs/graphql';
 import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
+import { User } from '../../users/models/user.model';
+import { ActivityLog } from '../../activity-logs/models/activity-log.model';
 
 export interface IRequest {
   _id?: string;
@@ -74,4 +75,12 @@ export class Request extends Model<IRequest> {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  user() {
+    return this.belongsTo(User, 'userId');
+  }
+
+  activityLogs() {
+    return this.hasMany(ActivityLog, 'requestId');
+  }
 }

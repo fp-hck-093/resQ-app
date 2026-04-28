@@ -2,6 +2,7 @@ import { Field, ID, ObjectType } from '@nestjs/graphql';
 import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
+import { User } from '../../users/models/user.model';
 
 export interface IUserLocation {
   _id?: string;
@@ -61,4 +62,8 @@ export class UserLocation extends Model<IUserLocation> {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  user() {
+    return this.belongsTo(User, 'userId');
+  }
 }

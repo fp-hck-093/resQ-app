@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "204898753776",
+    "project_id": "resq-app-3325c",
+    "storage_bucket": "resq-app-3325c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:204898753776:android:c553d5149740f58c493635",
+        "android_client_info": {
+          "package_name": "com.erwindw99.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrv6XkqAzrpUaVdaNWsqRGppF-X-K7gvA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

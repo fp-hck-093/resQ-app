@@ -11,12 +11,16 @@ import { GetRequestsFilterInput } from './dto/get-requests-filter.input';
 import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { ActivityLogStatus } from '../activity-logs/models/activity-log.model';
+import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class RequestsService {
   constructor(
     @InjectModel(Request) private requestModel: typeof Request,
     private activityLogsService: ActivityLogsService,
+    private notificationsService: NotificationsService,
+    private usersService: UsersService,
   ) {}
 
   async createRequest(input: CreateRequestInput): Promise<Request> {
@@ -203,6 +207,17 @@ export class RequestsService {
 
     await this.activityLogsService.create(volunteerId, requestId);
 
+    // Notify request owner
+    const owner = await this.usersService.findById(request.userId.toString());
+    if (owner?.pushToken) {
+      void this.notificationsService.sendToToken(
+        owner.pushToken,
+        'Ada yang ingin membantu!',
+        `Seseorang telah menerima request ${request.category} kamu.`,
+        { requestId },
+      );
+    }
+
     return request;
   }
 
@@ -228,6 +243,27 @@ export class RequestsService {
       id,
       ActivityLogStatus.COMPLETED,
     );
+
+    // Notify all volunteers
+    const volunteerIds = (
+      (request.volunteerIds as unknown as string[]) ?? []
+    ).map(String);
+
+    const volunteers = await Promise.all(
+      volunteerIds.map((vid) => this.usersService.findById(vid)),
+    );
+    const tokens = volunteers
+      .map((v) => v?.pushToken)
+      .filter((t): t is string => !!t);
+
+    if (tokens.length > 0) {
+      void this.notificationsService.sendToMany(
+        tokens,
+        'Request selesai!',
+        `Request ${request.category} dari ${request.userName} telah diselesaikan.`,
+        { requestId: id },
+      );
+    }
 
     return request;
   }

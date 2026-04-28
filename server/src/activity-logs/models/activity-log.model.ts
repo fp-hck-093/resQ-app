@@ -1,6 +1,8 @@
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
 import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
+import { User } from '../../users/models/user.model';
+import { Request } from '../../requests/models/request.model';
 
 export enum ActivityLogStatus {
   ACTIVE = 'active',
@@ -43,4 +45,12 @@ export class ActivityLog extends Model<IActivityLog> {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  volunteer() {
+    return this.belongsTo(User, 'volunteerId');
+  }
+
+  request() {
+    return this.belongsTo(Request, 'requestId');
+  }
 }
