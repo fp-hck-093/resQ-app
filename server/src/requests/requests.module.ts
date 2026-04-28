@@ -8,6 +8,8 @@ import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
 import { RequestsService } from './requests.service';
 import { RequestsResolver } from './requests.resolver';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
       BmkgAlert,
     ]),
     ActivityLogsModule,
+        NotificationsModule,
+    UsersModule,
   ],
   providers: [RequestsService, RequestsResolver],
   exports: [RequestsService],

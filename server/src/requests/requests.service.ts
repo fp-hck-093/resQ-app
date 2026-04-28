@@ -13,6 +13,8 @@ import { GetRequestsFilterInput } from './dto/get-requests-filter.input';
 import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { ActivityLogStatus } from '../activity-logs/models/activity-log.model';
+import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
 import { User } from '../users/models/user.model';
 import { DangerZone } from '../danger-zones/models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
@@ -49,6 +51,8 @@ export class RequestsService {
     private earthquakeModel: typeof EarthquakeAlert,
     @InjectModel(BmkgAlert) private bmkgAlertModel: typeof BmkgAlert,
     private activityLogsService: ActivityLogsService,
+    private notificationsService: NotificationsService,
+    private usersService: UsersService,
     private configService: ConfigService,
   ) {}
 
@@ -414,6 +418,18 @@ export class RequestsService {
 
     await this.activityLogsService.create(volunteerId, requestId);
 
+    // Notify request owner
+    const owner = await this.usersService.findById(request.userId.toString());
+    if (owner?.pushToken) {
+      void this.notificationsService.sendToToken(
+        owner.pushToken,
+        'Ada yang ingin membantu!',
+        `Seseorang telah menerima request ${request.category} kamu.`,
+        { requestId },
+      );
+    }
+
+    return request;
     const [withVolunteers] = await this.attachVolunteers([request]);
     return withVolunteers;
   }
@@ -441,6 +457,28 @@ export class RequestsService {
       ActivityLogStatus.COMPLETED,
     );
 
+    // Notify all volunteers
+    const volunteerIds = (
+      (request.volunteerIds as unknown as string[]) ?? []
+    ).map(String);
+
+    const volunteers = await Promise.all(
+      volunteerIds.map((vid) => this.usersService.findById(vid)),
+    );
+    const tokens = volunteers
+      .map((v) => v?.pushToken)
+      .filter((t): t is string => !!t);
+
+    if (tokens.length > 0) {
+      void this.notificationsService.sendToMany(
+        tokens,
+        'Request selesai!',
+        `Request ${request.category} dari ${request.userName} telah diselesaikan.`,
+        { requestId: id },
+      );
+    }
+
+    return request;
     const [withVolunteers] = await this.attachVolunteers([request]);
     return withVolunteers;
   }

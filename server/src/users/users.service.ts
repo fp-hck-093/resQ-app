@@ -80,6 +80,10 @@ export class UsersService {
       .update({ password: hashedPassword });
   }
 
+  async savePushToken(userId: string, token: string): Promise<void> {
+    await this.userModel.where('_id', userId).update({ pushToken: token });
+  }
+
   async updateLocation(
     userId: string,
     input: UpdateLocationInput,

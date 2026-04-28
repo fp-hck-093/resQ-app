@@ -15,7 +15,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import * as SecureStore from "expo-secure-store";
+import client from "../../config/apollo";
+import { registerForPushNotificationsAsync } from "../../utils/notifications";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+
+const SAVE_PUSH_TOKEN = gql`
+  mutation SavePushToken($token: String!) {
+    savePushToken(token: $token)
+  }
+`;
 
 const LOGIN_MUTATION = gql`
   mutation Login($input: LoginInput!) {
@@ -32,8 +40,8 @@ const LOGIN_MUTATION = gql`
 `;
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("erwind@gmail.com");
+  const [password, setPassword] = useState("123456");
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [errors, setErrors] = useState({});
@@ -69,6 +77,22 @@ export default function LoginScreen({ navigation }) {
     onCompleted: async (data) => {
       if (data.login.token) {
         await SecureStore.setItemAsync("access_token", data.login.token);
+        const pushToken = await registerForPushNotificationsAsync();
+        console.log("[Push] push token obtained:", pushToken);
+        if (pushToken) {
+          try {
+            await client.mutate({
+              mutation: SAVE_PUSH_TOKEN,
+              variables: { token: pushToken },
+            });
+            console.log("[Push] push token saved to DB");
+          } catch (err) {
+            console.warn(
+              "[Push] savePushToken mutation failed:",
+              err?.message ?? err,
+            );
+          }
+        }
       }
       navigation.replace("Home");
     },

@@ -1,6 +1,9 @@
 import { Field, HideField, ID, ObjectType } from '@nestjs/graphql';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
+import { Request } from '../../requests/models/request.model';
+import { ActivityLog } from '../../activity-logs/models/activity-log.model';
+import { UserLocation } from '../../locations/models/locations.model';
 
 export interface IUser {
   _id?: string;
@@ -9,6 +12,7 @@ export interface IUser {
   phone: string;
   password: string;
   profilePhoto?: string;
+  pushToken?: string;
   currentLocation?: {
     type: string;
     coordinates: number[];
@@ -41,6 +45,9 @@ export class User extends Model<IUser> {
   @Field(() => String, { nullable: true })
   profilePhoto?: string;
 
+  @Field(() => String, { nullable: true })
+  pushToken?: string;
+
   @Field(() => GeoPoint, { nullable: true })
   currentLocation?: GeoPoint;
 
@@ -52,4 +59,16 @@ export class User extends Model<IUser> {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  requests() {
+    return this.hasMany(Request, 'userId');
+  }
+
+  activityLogs() {
+    return this.hasMany(ActivityLog, 'volunteerId');
+  }
+
+  locations() {
+    return this.hasMany(UserLocation, 'userId');
+  }
 }

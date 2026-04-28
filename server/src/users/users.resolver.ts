@@ -56,6 +56,16 @@ export class UsersResolver {
   }
 
   @UseGuards(JwtGuard)
+  @Mutation(() => String)
+  async savePushToken(
+    @CurrentUser() user: User,
+    @Args('token') token: string,
+  ): Promise<string> {
+    await this.usersService.savePushToken(user._id, token);
+    return 'Push token saved';
+  }
+
+  @UseGuards(JwtGuard)
   @Mutation(() => User, { nullable: true })
   async updateLocation(
     @CurrentUser() user: User,

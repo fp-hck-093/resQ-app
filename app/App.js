@@ -16,7 +16,9 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
+import { gql } from "@apollo/client";
 import client from "./config/apollo";
+import { registerForPushNotificationsAsync } from "./utils/notifications";
 
 // Auth Screens
 import ForgotPasswordScreen from "./screens/auth/ForgotPasswordScreen";
@@ -155,6 +157,12 @@ function MainTabs() {
   );
 }
 
+const SAVE_PUSH_TOKEN = gql`
+  mutation SavePushToken($token: String!) {
+    savePushToken(token: $token)
+  }
+`;
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -163,6 +171,16 @@ export default function App() {
     SecureStore.getItemAsync("access_token").then((token) => {
       setIsLoggedIn(!!token);
       setIsLoading(false);
+
+      if (token) {
+        registerForPushNotificationsAsync().then((pushToken) => {
+          if (!pushToken) return;
+          client.mutate({
+            mutation: SAVE_PUSH_TOKEN,
+            variables: { token: pushToken },
+          });
+        });
+      }
     });
   }, []);
 
