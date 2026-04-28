@@ -3,9 +3,9 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectModel } from '@mongoloquent/nestjs';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { InjectDB, InjectModel } from '@mongoloquent/nestjs';
 import { ObjectId } from 'mongodb';
 import { ConfigService } from '@nestjs/config';
 import { URGENCY_QUEUE, SCORE_URGENCY_JOB } from './requests.constants';
@@ -22,6 +22,7 @@ import { User } from '../users/models/user.model';
 import { DangerZone } from '../danger-zones/models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
+import { DB } from 'mongoloquent';
 
 const GEMINI_URGENCY_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
@@ -46,6 +47,7 @@ function haversineKm(
 @Injectable()
 export class RequestsService {
   constructor(
+    @InjectDB() private db: DB,
     @InjectModel(Request) private requestModel: typeof Request,
     @InjectModel(User) private userModel: typeof User,
     @InjectModel(DangerZone) private dangerZoneModel: typeof DangerZone,
@@ -340,6 +342,26 @@ export class RequestsService {
     return this.attachVolunteers(results as unknown as Request[]);
   }
 
+  async getRequestsForMap(
+    latitude: number,
+    longitude: number,
+    status?: string,
+    category?: string,
+  ): Promise<Request[]> {
+    let query = this.db.collection('requests').where('location', {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [longitude, latitude] },
+        $maxDistance: NEARBY_REQUESTS_RADIUS_KM * 1000,
+      },
+    });
+
+    if (status) query = query.where('status', status);
+    if (category) query = query.where('category', category);
+
+    const results = await query.get();
+    return results as unknown as Request[];
+  }
+
   async getRequestsByStatus(status: string): Promise<Request[]> {
     const validStatuses = ['pending', 'in_progress', 'completed'];
     if (!validStatuses.includes(status)) {
@@ -444,8 +466,6 @@ export class RequestsService {
     }
 
     return request;
-    const [withVolunteers] = await this.attachVolunteers([request]);
-    return withVolunteers;
   }
 
   async updateRequestStatus(id: string, userId: string): Promise<Request> {
@@ -493,7 +513,5 @@ export class RequestsService {
     }
 
     return request;
-    const [withVolunteers] = await this.attachVolunteers([request]);
-    return withVolunteers;
   }
 }
