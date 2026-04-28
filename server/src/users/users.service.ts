@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
 import * as bcrypt from 'bcryptjs';
 import { User, IUser } from './models/user.model';
+import { PaginatedUsers } from './dto/paginated-users.output';
 import { UpdateLocationInput } from './dto/update-location.input';
 import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordInput } from './dto/change-password.input';
@@ -22,6 +23,24 @@ export class UsersService {
   async findAll(): Promise<User[]> {
     const result = await this.userModel.get();
     return result as unknown as User[];
+  }
+
+  async searchUsers(
+    name: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedUsers> {
+    const all = await this.userModel
+      .where('name', { $regex: name, $options: 'i' })
+      .orderBy('name', 'asc')
+      .get();
+
+    const users = all as unknown as User[];
+    const total = users.length;
+    const skip = (page - 1) * limit;
+    const data = users.slice(skip, skip + limit);
+
+    return { data, total, page, limit };
   }
 
   async create(

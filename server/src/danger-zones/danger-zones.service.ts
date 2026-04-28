@@ -305,14 +305,18 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     return results as unknown as DangerZone[];
   }
 
-  async getDangerZonesNear(lat: number, lon: number): Promise<DangerZone[]> {
+  async getDangerZonesNear(
+    lat: number,
+    lon: number,
+    radiusKm: number = NEARBY_KM,
+  ): Promise<DangerZone[]> {
     const zones = await this.dangerZoneModel.where('isActive', true).get();
     const now = new Date().toISOString();
     return (zones as unknown as DangerZone[]).filter((z) => {
       if (z.activeUntil && z.activeUntil < now) return false;
       const [zLon, zLat] = (z.location as unknown as { coordinates: number[] })
         .coordinates;
-      return haversineKm(lat, lon, zLat, zLon) <= NEARBY_KM;
+      return haversineKm(lat, lon, zLat, zLon) <= radiusKm;
     });
   }
 
@@ -448,6 +452,29 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   }
 
   private ruleBasedEarthquakeZone(magnitude: number): GeminiResult {
+    if (magnitude >= 8.0) {
+      return {
+        title: `Catastrophic Earthquake M${magnitude.toFixed(1)}`,
+        description:
+          `A catastrophic M${magnitude.toFixed(1)} earthquake has been` +
+          ` detected. Widespread destruction is expected across a very` +
+          ` large area.`,
+        level: 'extreme',
+        radiusKm: 200,
+        activeUntilHours: 72,
+      };
+    }
+    if (magnitude >= 7.5) {
+      return {
+        title: `Great Earthquake M${magnitude.toFixed(1)}`,
+        description:
+          `A great M${magnitude.toFixed(1)} earthquake has been detected.` +
+          ` Serious damage expected across entire provinces.`,
+        level: 'extreme',
+        radiusKm: 150,
+        activeUntilHours: 72,
+      };
+    }
     if (magnitude >= 7.0) {
       return {
         title: `Major Earthquake M${magnitude.toFixed(1)}`,
@@ -455,8 +482,19 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
           `A major M${magnitude.toFixed(1)} earthquake has been detected.` +
           ` Significant structural damage and aftershocks are expected.`,
         level: 'extreme',
-        radiusKm: 50,
+        radiusKm: 100,
         activeUntilHours: 48,
+      };
+    }
+    if (magnitude >= 6.5) {
+      return {
+        title: `Strong Earthquake M${magnitude.toFixed(1)}`,
+        description:
+          `A strong M${magnitude.toFixed(1)} earthquake has been detected.` +
+          ` Heavy damage expected in the affected area.`,
+        level: 'high',
+        radiusKm: 75,
+        activeUntilHours: 24,
       };
     }
     if (magnitude >= 6.0) {
@@ -466,15 +504,28 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
           `A strong M${magnitude.toFixed(1)} earthquake has been detected.` +
           ` Structural damage is possible in the affected area.`,
         level: 'high',
-        radiusKm: 30,
+        radiusKm: 50,
         activeUntilHours: 24,
+      };
+    }
+    if (magnitude >= 5.5) {
+      return {
+        title: `Moderate Earthquake M${magnitude.toFixed(1)}`,
+        description:
+          `A moderate M${magnitude.toFixed(1)} earthquake has been detected.` +
+          ` Light to moderate damage possible near the epicenter.`,
+        level: 'moderate',
+        radiusKm: 35,
+        activeUntilHours: 12,
       };
     }
     return {
       title: `Moderate Earthquake M${magnitude.toFixed(1)}`,
-      description: `A moderate M${magnitude.toFixed(1)} earthquake has been detected. Minor damage may occur.`,
+      description:
+        `A moderate M${magnitude.toFixed(1)} earthquake has been detected.` +
+        ` Minor damage may occur close to the epicenter.`,
       level: 'moderate',
-      radiusKm: 15,
+      radiusKm: 20,
       activeUntilHours: 12,
     };
   }

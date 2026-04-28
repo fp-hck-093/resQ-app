@@ -15,8 +15,14 @@ export class DangerZonesResolver {
   async getDangerZonesNear(
     @Args('latitude', { type: () => Float }) latitude: number,
     @Args('longitude', { type: () => Float }) longitude: number,
+    @Args('radiusKm', { type: () => Float, nullable: true })
+    radiusKm?: number,
   ): Promise<DangerZone[]> {
-    return this.dangerZonesService.getDangerZonesNear(latitude, longitude);
+    return this.dangerZonesService.getDangerZonesNear(
+      latitude,
+      longitude,
+      radiusKm,
+    );
   }
 
   @Mutation(() => String)
