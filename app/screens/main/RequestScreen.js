@@ -39,6 +39,7 @@ const GET_ALL_REQUESTS = gql`
       address
       numberOfPeople
       urgencyScore
+      userId
       userName
       createdAt
       volunteerIds
@@ -549,7 +550,7 @@ export default function RequestsScreen() {
             </ScrollView>
 
             {(() => {
-              const isOwn = selectedRequest?.userName === currentUser?.name;
+              const isOwn = selectedRequest?.userId === currentUser?._id;
               const isVolunteered =
                 volunteeredIds.has(selectedRequest?._id) ||
                 (currentUser?._id && selectedRequest?.volunteerIds?.includes(currentUser._id));
@@ -567,19 +568,24 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Requester buttons
               if (isOwn) {
                 return (
                   <View style={styles.volunteerActionRow}>
                     {status === "in_progress" && (
                       <TouchableOpacity
                         style={styles.completeBtn}
-                        onPress={() => confirm("Tandai Selesai", "Apakah request ini sudah selesai ditangani?", () => completeRequest({ variables: { id: selectedRequest._id } }))}
+                        onPress={() => confirm(
+                          "Selesaikan Request",
+                          "Apakah bantuan sudah kamu terima dan request ini selesai?",
+                          () => completeRequest({ variables: { id: selectedRequest._id } }),
+                        )}
                         disabled={busy}
                       >
                         {completeLoading ? <ActivityIndicator color="#fff" size="small" /> : (
                           <>
                             <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                            <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                            <Text style={styles.completeBtnText}>Request Selesai</Text>
                           </>
                         )}
                       </TouchableOpacity>
@@ -587,7 +593,11 @@ export default function RequestsScreen() {
                     {status === "pending" && (
                       <TouchableOpacity
                         style={[styles.cancelBtn, { flex: 1 }]}
-                        onPress={() => confirm("Batalkan Request", "Apakah kamu yakin ingin membatalkan request ini?", () => deleteRequest({ variables: { id: selectedRequest._id } }))}
+                        onPress={() => confirm(
+                          "Batalkan Request",
+                          "Apakah kamu yakin ingin membatalkan request ini?",
+                          () => deleteRequest({ variables: { id: selectedRequest._id } }),
+                        )}
                         disabled={busy}
                       >
                         {deleteLoading ? <ActivityIndicator color="#ef4444" size="small" /> : (
@@ -602,11 +612,16 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Volunteer — not yet joined
               if (!isVolunteered) {
                 return (
                   <TouchableOpacity
                     style={styles.volunteerBtn}
-                    onPress={() => confirm("Konfirmasi", "Apakah kamu yakin ingin membantu request ini?", () => volunteerForRequest({ variables: { requestId: selectedRequest._id } }))}
+                    onPress={() => confirm(
+                      "Konfirmasi",
+                      "Apakah kamu yakin ingin membantu request ini?",
+                      () => volunteerForRequest({ variables: { requestId: selectedRequest._id } }),
+                    )}
                     disabled={busy}
                   >
                     {volunteerLoading ? <ActivityIndicator color="#fff" /> : (
@@ -619,23 +634,32 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Volunteer — already joined
               return (
                 <View style={styles.volunteerActionRow}>
                   <TouchableOpacity
                     style={styles.completeBtn}
-                    onPress={() => confirm("Tandai Selesai", "Apakah kamu sudah selesai membantu request ini?", handleCompleteVolunteer)}
+                    onPress={() => confirm(
+                      "Selesai Membantu",
+                      "Tandai partisipasimu sebagai selesai?",
+                      handleCompleteVolunteer,
+                    )}
                     disabled={busy}
                   >
                     {activityLoading ? <ActivityIndicator color="#fff" size="small" /> : (
                       <>
                         <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                        <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                        <Text style={styles.completeBtnText}>Selesai Membantu</Text>
                       </>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.cancelBtn}
-                    onPress={() => confirm("Batalkan", "Apakah kamu yakin ingin membatalkan partisipasimu?", handleCancelVolunteer)}
+                    onPress={() => confirm(
+                      "Batalkan Partisipasi",
+                      "Apakah kamu yakin ingin membatalkan partisipasimu?",
+                      handleCancelVolunteer,
+                    )}
                     disabled={busy}
                   >
                     <Ionicons name="close-circle-outline" size={18} color="#ef4444" />

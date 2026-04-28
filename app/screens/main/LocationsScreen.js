@@ -21,6 +21,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 const GET_LOCATIONS = gql`
   query GetMyLocations {
     getMyLocations {
@@ -65,6 +67,9 @@ export default function LocationsScreen() {
   const [showViewMapModal, setShowViewMapModal] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
   const [pinnedLocation, setPinnedLocation] = useState(null);
   const [viewMapLocation, setViewMapLocation] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -126,6 +131,71 @@ export default function LocationsScreen() {
       console.log("Location error:", e);
     } finally {
       setLocationLoading(false);
+    }
+  };
+
+  const handleSearchChange = async (text) => {
+    setSearchQuery(text);
+    if (text.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": GOOGLE_API_KEY,
+        },
+        body: JSON.stringify({ input: text, includedRegionCodes: ["id"], languageCode: "id" }),
+      });
+      const data = await res.json();
+      const predictions = (data.suggestions ?? []).map((s) => s.placePrediction).filter(Boolean);
+      setSuggestions(predictions);
+    } catch {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSelectSuggestion = async (item) => {
+    setSuggestions([]);
+    setSearchQuery(item.structuredFormat?.mainText?.text ?? item.text?.text ?? "");
+    setMapLoading(true);
+    try {
+      const detailRes = await fetch(
+        `https://places.googleapis.com/v1/${item.place}`,
+        {
+          headers: {
+            "X-Goog-Api-Key": GOOGLE_API_KEY,
+            "X-Goog-FieldMask": "location",
+          },
+        },
+      );
+      const detailData = await detailRes.json();
+      const loc = detailData.location;
+      if (!loc) return;
+      const latitude = loc.latitude;
+      const longitude = loc.longitude;
+      setPinnedLocation({ latitude, longitude });
+      mapSearchRef.current?.animateToRegion(
+        { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        800,
+      );
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (geocode.length > 0) {
+        const g = geocode[0];
+        setForm({
+          ...form,
+          address: `${g.street || ""} ${g.district || ""}`.trim(),
+          city: g.city || g.subregion || "",
+          province: g.region || "",
+          country: g.country || "Indonesia",
+        });
+      }
+    } catch (e) {
+      console.log("Place detail error:", e);
+    } finally {
+      setMapLoading(false);
     }
   };
 
@@ -202,6 +272,8 @@ export default function LocationsScreen() {
   const closeAddModal = () => {
     setShowAddModal(false);
     setPinnedLocation(null);
+    setSearchQuery("");
+    setSuggestions([]);
     setForm({
       address: "",
       city: "",
@@ -523,10 +595,40 @@ export default function LocationsScreen() {
             <View style={{ width: 36 }} />
           </LinearGradient>
 
-          <View style={s.mapHint}>
-            <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
-            <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
+          <View style={s.mapSearch}>
+            <Ionicons name="search-outline" size={15} color="#94a3b8" />
+            <TextInput
+              style={s.mapSearchInput}
+              placeholder="Cari alamat atau tempat..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              returnKeyType="search"
+            />
+            {searchLoading && <ActivityIndicator size="small" color="#3b5fca" />}
           </View>
+
+          {suggestions.length > 0 ? (
+            <View style={s.suggestionBox}>
+              {suggestions.map((item, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.suggestionItem, i < suggestions.length - 1 && s.suggestionDivider]}
+                  onPress={() => handleSelectSuggestion(item)}
+                >
+                  <Ionicons name="location-outline" size={14} color="#3b5fca" />
+                  <Text style={s.suggestionText} numberOfLines={2}>
+                    {item.text?.text}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={s.mapHint}>
+              <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
+              <Text style={s.mapHintText}>Tap di peta atau cari lokasi di atas</Text>
+            </View>
+          )}
 
           <MapView
             ref={mapSearchRef}
