@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Circle } from "react-native-maps";
 import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { gql } from "@apollo/client";
@@ -38,6 +39,70 @@ const GET_NEARBY_REQUESTS = gql`
         type
         coordinates
       }
+    }
+  }
+`;
+
+const GET_ACTIVE_DANGER_ZONES = gql`
+  query GetActiveDangerZones {
+    getActiveDangerZones {
+      _id
+      title
+      description
+      level
+      location {
+        type
+        coordinates
+      }
+      radiusKm
+      requestCount
+    }
+  }
+`;
+
+const GET_DANGER_ZONES_NEAR = gql`
+  query GetDangerZonesNear($latitude: Float!, $longitude: Float!) {
+    getDangerZonesNear(latitude: $latitude, longitude: $longitude) {
+      _id
+      title
+      description
+      level
+      location {
+        type
+        coordinates
+      }
+      radiusKm
+      requestCount
+    }
+  }
+`;
+
+const GET_MY_LOCATIONS = gql`
+  query GetMyLocations {
+    getMyLocations {
+      _id
+      address
+      city
+      location {
+        coordinates
+      }
+    }
+  }
+`;
+
+const GET_DANGER_ZONES_FOR_LOCATIONS = gql`
+  query GetDangerZonesForLocations($locations: [CoordinateInput!]!) {
+    getDangerZonesForLocations(locations: $locations) {
+      _id
+      title
+      description
+      level
+      location {
+        type
+        coordinates
+      }
+      radiusKm
+      requestCount
     }
   }
 `;
@@ -76,11 +141,30 @@ const CATEGORY_CONFIG = {
   "Money/Item": { color: "#22c55e", icon: "cash", bg: "#f0fdf4" },
 };
 
+const DANGER_LEVEL_CONFIG = {
+  extreme:  { color: "#7f1d1d", fill: "rgba(127,29,29,0.15)",  stroke: "rgba(127,29,29,0.8)",  pinColor: "#7f1d1d" },
+  high:     { color: "#ef4444", fill: "rgba(239,68,68,0.12)",  stroke: "rgba(239,68,68,0.7)",  pinColor: "#ef4444" },
+  moderate: { color: "#f97316", fill: "rgba(249,115,22,0.10)", stroke: "rgba(249,115,22,0.6)", pinColor: "#f97316" },
+  low:      { color: "#eab308", fill: "rgba(234,179,8,0.08)",  stroke: "rgba(234,179,8,0.5)",  pinColor: "#eab308" },
+};
+
 const STATUS_CONFIG = {
   pending: { color: "#ef4444", label: "Pending" },
   in_progress: { color: "#f97316", label: "In Progress" },
   completed: { color: "#22c55e", label: "Selesai" },
 };
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -90,6 +174,8 @@ export default function HomeScreen({ navigation }) {
   const [userLocation, setUserLocation] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showAllZones, setShowAllZones] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
 
   const {
     data: requestsData,
@@ -106,6 +192,35 @@ export default function HomeScreen({ navigation }) {
     pollInterval: 300000,
   });
   const { data: earthquakeData } = useQuery(GET_EARTHQUAKE_ALERTS, {
+    pollInterval: 300000,
+  });
+  const { data: dangerZonesAllData } = useQuery(GET_ACTIVE_DANGER_ZONES, {
+    fetchPolicy: 'cache-and-network',
+    pollInterval: 300000,
+  });
+  const { data: dangerZonesNearData } = useQuery(GET_DANGER_ZONES_NEAR, {
+    variables: userLocation
+      ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
+      : {},
+    skip: !userLocation || showAllZones,
+    fetchPolicy: 'network-only',
+    pollInterval: 300000,
+  });
+  const { data: myLocationsData } = useQuery(GET_MY_LOCATIONS, {
+    fetchPolicy: 'cache-and-network',
+    pollInterval: 300000,
+  });
+  const savedLocations = myLocationsData?.getMyLocations || [];
+  const savedCoordinates = savedLocations
+    .filter((l) => l.location?.coordinates?.length === 2)
+    .map((l) => ({
+      latitude: l.location.coordinates[1],
+      longitude: l.location.coordinates[0],
+    }));
+  const { data: dangerZonesSavedData } = useQuery(GET_DANGER_ZONES_FOR_LOCATIONS, {
+    variables: { locations: savedCoordinates },
+    skip: showAllZones || savedCoordinates.length === 0,
+    fetchPolicy: 'network-only',
     pollInterval: 300000,
   });
 
@@ -142,6 +257,23 @@ export default function HomeScreen({ navigation }) {
     }).start();
   }, [selectedRequest]);
 
+  // Handle notification tap → navigate to HomeScreen
+  useEffect(() => {
+    // App was opened by tapping a notification (from background/closed)
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response?.notification?.request?.content?.data?.screen === "Home") {
+        navigation.navigate("Home");
+      }
+    });
+    // App is foregrounded and user taps a notification
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      if (response.notification.request.content.data?.screen === "Home") {
+        navigation.navigate("Home");
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   const handleLocate = async () => {
     try {
       const position = await Location.getCurrentPositionAsync({});
@@ -164,9 +296,44 @@ export default function HomeScreen({ navigation }) {
   const requests = requestsData?.getRequests || [];
   const bmkgAlerts = bmkgData?.getActiveBmkgAlerts || [];
   const earthquakes = earthquakeData?.getEarthquakeAlerts || [];
+  const dangerZonesRaw = showAllZones
+    ? (dangerZonesAllData?.getActiveDangerZones || [])
+    : (dangerZonesNearData?.getDangerZonesNear || []);
+  const dangerZonesSaved = showAllZones ? [] : (dangerZonesSavedData?.getDangerZonesForLocations || []);
+
+  // Merge current-location zones + saved-location zones (deduplicate by _id)
+  const mergedZones = [...dangerZonesRaw];
+  const seenIds = new Set(dangerZonesRaw.map((z) => z._id));
+  for (const z of dangerZonesSaved) {
+    if (!seenIds.has(z._id)) mergedZones.push(z);
+  }
+
+  // Display filter: show zone if user's current location OR any saved location is inside it
+  const allWatchCoords = [
+    ...(userLocation ? [{ latitude: userLocation.latitude, longitude: userLocation.longitude }] : []),
+    ...savedCoordinates,
+  ];
+  const dangerZones = (!showAllZones && allWatchCoords.length > 0)
+    ? mergedZones.filter((z) => {
+        if (!z.location?.coordinates) return false;
+        const [zLon, zLat] = z.location.coordinates;
+        return allWatchCoords.some(
+          (loc) => haversineKm(loc.latitude, loc.longitude, zLat, zLon) <= z.radiusKm,
+        );
+      })
+    : mergedZones;
+  console.log('[DangerZones] current:', dangerZonesRaw.length, '| saved:', dangerZonesSaved.length, '| displayed:', dangerZones.length);
+
   const dangerousAlerts = bmkgAlerts.filter((a) => a.isDangerous);
   const latestEarthquake = earthquakes[0];
+  const highDangerZones = dangerZones.filter((z) => z.level === "high" || z.level === "extreme");
   const allAlerts = [
+    ...highDangerZones.map((z) => ({
+      id: z._id,
+      icon: "alert-circle",
+      color: "#ef4444",
+      text: `Zona Bahaya: ${z.title}`,
+    })),
     ...dangerousAlerts.map((a) => ({
       id: a._id,
       icon: "warning",
@@ -184,6 +351,42 @@ export default function HomeScreen({ navigation }) {
         ]
       : []),
   ];
+
+  const savedZoneIds = new Set(dangerZonesSaved.map((z) => z._id));
+
+  const renderDangerZones = () =>
+    dangerZones.map((zone) => {
+      if (!zone.location?.coordinates) return null;
+      const [longitude, latitude] = zone.location.coordinates;
+      const cfg = DANGER_LEVEL_CONFIG[zone.level] || DANGER_LEVEL_CONFIG.low;
+      const isFromSaved = savedZoneIds.has(zone._id);
+      // find which saved location name this zone covers (for the callout)
+      const savedMatch = isFromSaved
+        ? savedLocations.find((loc) => {
+            if (!loc.location?.coordinates) return false;
+            const [lLon, lLat] = loc.location.coordinates;
+            return haversineKm(lLat, lLon, latitude, longitude) <= zone.radiusKm;
+          })
+        : null;
+      return (
+        <React.Fragment key={zone._id}>
+          <Circle
+            center={{ latitude, longitude }}
+            radius={zone.radiusKm * 1000}
+            fillColor={cfg.fill}
+            strokeColor={isFromSaved ? cfg.color : cfg.stroke}
+            strokeWidth={isFromSaved ? 2.5 : 1.5}
+            strokeDashPattern={isFromSaved ? [8, 4] : undefined}
+          />
+          <Marker
+            coordinate={{ latitude, longitude }}
+            pinColor={cfg.pinColor}
+            title={`${isFromSaved ? "📍 " : ""}${zone.title}`}
+            description={`Level: ${zone.level} · ${zone.radiusKm} km${savedMatch ? ` · ${savedMatch.city}` : ""}`}
+          />
+        </React.Fragment>
+      );
+    });
 
   const renderMarkers = () =>
     requests.map((request) => {
@@ -225,6 +428,7 @@ export default function HomeScreen({ navigation }) {
         scrollEnabled
         zoomControlEnabled
       >
+        {renderDangerZones()}
         {renderMarkers()}
 
         {userLocation && (
@@ -286,7 +490,45 @@ export default function HomeScreen({ navigation }) {
         >
           <Ionicons name="refresh" size={18} color="#3b5fca" />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mapControlBtn, showAllZones && styles.mapControlBtnActive]}
+          onPress={() => setShowAllZones((v) => !v)}
+        >
+          <Ionicons name="globe-outline" size={18} color={showAllZones ? "#fff" : "#3b5fca"} />
+        </TouchableOpacity>
       </View>
+
+      {/* ── LEGEND TOGGLE (kiri bawah) ── */}
+      <View style={[styles.legendControls, { bottom: 180 + insets.bottom }]}>
+        <TouchableOpacity
+          style={[styles.mapControlBtn, showLegend && styles.mapControlBtnActive]}
+          onPress={() => setShowLegend((v) => !v)}
+        >
+          <Ionicons name="layers-outline" size={18} color={showLegend ? "#fff" : "#3b5fca"} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── LEGEND PANEL ── */}
+      {showLegend && (
+        <View style={[styles.legendPanel, { bottom: 232 + insets.bottom }]}>
+          <Text style={styles.legendPanelTitle}>Zona Bahaya</Text>
+          {[
+            { level: "extreme", label: "Ekstrem" },
+            { level: "high",    label: "Tinggi" },
+            { level: "moderate",label: "Sedang" },
+            { level: "low",     label: "Rendah" },
+          ].map(({ level, label }) => (
+            <View key={level} style={styles.legendRow}>
+              <View style={[styles.legendColorDot, { backgroundColor: DANGER_LEVEL_CONFIG[level].color }]} />
+              <Text style={styles.legendRowText}>{label}</Text>
+            </View>
+          ))}
+          <View style={styles.legendDivider} />
+          <Text style={styles.legendPanelSubTitle}>
+            {showAllZones ? "Semua zona aktif" : "Zona di sekitar kamu"}
+          </Text>
+        </View>
+      )}
 
       {/* ── SELECTED REQUEST CARD ── */}
       {selectedRequest && (
@@ -429,6 +671,7 @@ export default function HomeScreen({ navigation }) {
             scrollEnabled
             zoomControlEnabled
           >
+            {renderDangerZones()}
             {requests.map((request) => {
               if (!request.location?.coordinates) return null;
               const [longitude, latitude] = request.location.coordinates;
@@ -740,4 +983,68 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   fullScreenCloseBtnBlur: { padding: 12 },
+
+  // Map control active state
+  mapControlBtnActive: {
+    backgroundColor: "#3b5fca",
+  },
+
+  // Legend controls (left side)
+  legendControls: {
+    position: "absolute",
+    left: 16,
+    gap: 8,
+    zIndex: 5,
+  },
+
+  // Legend panel
+  legendPanel: {
+    position: "absolute",
+    left: 16,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 5,
+    minWidth: 140,
+  },
+  legendPanelTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 5,
+  },
+  legendColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendRowText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  legendDivider: {
+    height: 1,
+    backgroundColor: "#f1f5f9",
+    marginVertical: 8,
+  },
+  legendPanelSubTitle: {
+    fontSize: 10,
+    color: "#94a3b8",
+    fontStyle: "italic",
+  },
 });

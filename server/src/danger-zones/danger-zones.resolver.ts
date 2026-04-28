@@ -3,6 +3,7 @@ import { DangerZonesService } from './danger-zones.service';
 import { DangerZone } from './models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
+import { CoordinateInput } from './dto/coordinate.input';
 
 @Resolver()
 export class DangerZonesResolver {
@@ -46,8 +47,24 @@ export class DangerZonesResolver {
     return await this.dangerZonesService.getBmkgAlertsNear(latitude, longitude);
   }
 
+  @Query(() => [DangerZone])
+  async getDangerZonesForLocations(
+    @Args('locations', { type: () => [CoordinateInput] })
+    locations: CoordinateInput[],
+  ): Promise<DangerZone[]> {
+    return this.dangerZonesService.getDangerZonesForLocations(locations);
+  }
+
   @Mutation(() => String)
   async triggerDangerZoneAnalysis(): Promise<string> {
     return this.dangerZonesService.triggerAnalysis();
+  }
+
+  @Mutation(() => String)
+  async testDangerZoneNotification(
+    @Args('pushToken') pushToken: string,
+  ): Promise<string> {
+    await this.dangerZonesService.testPushNotification(pushToken);
+    return 'Test notification sent';
   }
 }
