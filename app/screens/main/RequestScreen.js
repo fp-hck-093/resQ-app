@@ -16,8 +16,8 @@ import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
 
 const GET_ALL_REQUESTS = gql`
-  query GetAllRequests {
-    getAllRequests {
+  query GetRequests {
+    getRequests {
       _id
       category
       description
@@ -127,7 +127,7 @@ export default function RequestsScreen() {
     },
   );
 
-  const requests = data?.getAllRequests || [];
+  const requests = data?.getRequests || [];
   const filtered =
     selectedCategory === "All"
       ? requests

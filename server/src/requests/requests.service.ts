@@ -88,11 +88,25 @@ export class RequestsService {
       return results;
     }
 
-    let query = this.requestModel.where('_id', { $exists: true });
-    if (search)
-      query = query.where('userName', { $regex: search, $options: 'i' });
-    if (category) query = query.where('category', category);
-    if (status) query = query.where('status', status);
+    const hasFilters = !!(search || category || status);
+
+    if (!hasFilters) {
+      const results = await this.requestModel
+        .orderBy(sortBy ?? 'createdAt', order)
+        .get();
+      return results as unknown as Request[];
+    }
+
+    const firstFilter = search
+      ? this.requestModel.where('userName', { $regex: search, $options: 'i' })
+      : category
+        ? this.requestModel.where('category', category)
+        : this.requestModel.where('status', status!);
+
+    let query = firstFilter;
+    if (search && category) query = query.where('category', category);
+    if (search && status) query = query.where('status', status);
+    if (!search && category && status) query = query.where('status', status);
 
     const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
     return results as unknown as Request[];
