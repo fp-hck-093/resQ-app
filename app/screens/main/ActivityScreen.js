@@ -16,13 +16,15 @@ import { LinearGradient } from "expo-linear-gradient";
 
 const GET_MY_ACTIVITIES = gql`
   query GetMyActivities {
-    getMyActivities {
-      _id
-      volunteerId
-      requestId
-      status
-      createdAt
-      updatedAt
+    getMyActivityLogs(page: 1, limit: 100) {
+      data {
+        _id
+        volunteerId
+        requestId
+        status
+        createdAt
+        updatedAt
+      }
     }
   }
 `;
@@ -101,7 +103,10 @@ export default function ActivityScreen({ route }) {
     data: activitiesData,
     loading: activitiesLoading,
     refetch: refetchActivities,
-  } = useQuery(GET_MY_ACTIVITIES);
+  } = useQuery(GET_MY_ACTIVITIES, {
+    fetchPolicy: "network-only",
+    notifyOnNetworkStatusChange: true,
+  });
   const {
     data: requestsData,
     loading: requestsLoading,
@@ -115,16 +120,19 @@ export default function ActivityScreen({ route }) {
     },
   );
 
-  const activities = activitiesData?.getMyActivities || [];
+  const activities = activitiesData?.getMyActivityLogs?.data || [];
   const myRequests = requestsData?.getMyRequests || [];
 
   const completedCount = activities.filter(
-    (a) => a.status === "completed",
+    (a) => a.status?.toLowerCase() === "completed",
   ).length;
-  const activeCount = activities.filter((a) => a.status === "active").length;
+  const activeCount = activities.filter(
+    (a) => a.status?.toLowerCase() === "active",
+  ).length;
 
   const renderActivity = ({ item }) => {
-    const config = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
+    const itemStatus = item.status?.toLowerCase();
+    const config = STATUS_CONFIG[itemStatus] || STATUS_CONFIG.pending;
     return (
       <View style={styles.card}>
         <View style={styles.cardInner}>
@@ -153,7 +161,7 @@ export default function ActivityScreen({ route }) {
           </View>
         </View>
 
-        {item.status !== "completed" && item.status !== "cancelled" && (
+        {itemStatus !== "completed" && itemStatus !== "cancelled" && (
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={styles.completeBtn}
