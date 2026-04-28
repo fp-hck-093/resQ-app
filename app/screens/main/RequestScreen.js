@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +20,15 @@ import { useQuery, useMutation } from "@apollo/client/react";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
+const GET_ME = gql`
+  query GetMe {
+    me {
+      _id
+      name
+    }
+  }
+`;
+
 const GET_ALL_REQUESTS = gql`
   query GetRequests($filter: GetRequestsFilterInput) {
     getRequests(filter: $filter) {
@@ -31,6 +41,7 @@ const GET_ALL_REQUESTS = gql`
       urgencyScore
       userName
       createdAt
+      volunteerIds
       location {
         type
         coordinates
@@ -58,6 +69,30 @@ const VOLUNTEER_FOR_REQUEST = gql`
       status
       volunteerIds
     }
+  }
+`;
+
+const UPDATE_ACTIVITY_STATUS = gql`
+  mutation UpdateActivityStatus($requestId: String!, $status: ActivityLogStatus!) {
+    updateActivityStatus(requestId: $requestId, status: $status) {
+      _id
+      status
+    }
+  }
+`;
+
+const COMPLETE_REQUEST = gql`
+  mutation CompleteRequest($id: String!) {
+    completeRequest(id: $id) {
+      _id
+      status
+    }
+  }
+`;
+
+const DELETE_REQUEST = gql`
+  mutation DeleteRequest($id: String!) {
+    deleteRequest(id: $id)
   }
 `;
 
@@ -99,6 +134,8 @@ export default function RequestsScreen() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [volunteeredIds, setVolunteeredIds] = useState(new Set());
+  const [confirmModal, setConfirmModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All");
@@ -112,6 +149,8 @@ export default function RequestsScreen() {
     address: "",
   });
 
+  const { data: meData } = useQuery(GET_ME);
+  const currentUser = meData?.me;
   const filter = {
     ...(search ? { search } : {}),
     ...(selectedCategory !== "All" ? { category: selectedCategory } : {}),
@@ -128,11 +167,81 @@ export default function RequestsScreen() {
   const [volunteerForRequest, { loading: volunteerLoading }] = useMutation(
     VOLUNTEER_FOR_REQUEST,
     {
-      onCompleted: () => {
+      onCompleted: (result) => {
         refetch();
-        setSelectedRequest(null);
+        const rid = result?.volunteerForRequest?._id || selectedRequest?._id;
+        if (!rid) return;
+        setVolunteeredIds((prev) => new Set([...prev, rid]));
+        setSelectedRequest((prev) => ({
+          ...prev,
+          status: result?.volunteerForRequest?.status ?? "in_progress",
+          volunteerIds: result?.volunteerForRequest?.volunteerIds ?? prev?.volunteerIds,
+        }));
       },
     },
+  );
+
+  const [updateActivityStatus, { loading: activityLoading }] = useMutation(
+    UPDATE_ACTIVITY_STATUS,
+  );
+
+  const handleCompleteVolunteer = () => {
+    const rid = selectedRequest._id;
+    updateActivityStatus({
+      variables: { requestId: rid, status: "COMPLETED" },
+      onCompleted: () => {
+        refetch();
+        setSelectedRequest((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "completed",
+              }
+            : prev,
+        );
+      },
+    });
+  };
+
+  const handleCancelVolunteer = () => {
+    const rid = selectedRequest._id;
+    updateActivityStatus({
+      variables: { requestId: rid, status: "CANCELLED" },
+      onCompleted: () => {
+        refetch();
+        setVolunteeredIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        setSelectedRequest((prev) =>
+          prev
+            ? {
+                ...prev,
+                status:
+                  (prev.volunteerIds || []).filter(
+                    (id) => id !== currentUser?._id,
+                  ).length > 0
+                    ? "in_progress"
+                    : "pending",
+                volunteerIds: (prev.volunteerIds || []).filter(
+                  (id) => id !== currentUser?._id,
+                ),
+              }
+            : prev,
+        );
+      },
+    });
+  };
+
+  const [completeRequest, { loading: completeLoading }] = useMutation(
+    COMPLETE_REQUEST,
+    { onCompleted: () => { refetch(); setSelectedRequest(null); } },
+  );
+
+  const [deleteRequest, { loading: deleteLoading }] = useMutation(
+    DELETE_REQUEST,
+    { onCompleted: () => { refetch(); setSelectedRequest(null); } },
   );
 
   const [createRequest, { loading: createLoading }] = useMutation(
@@ -152,6 +261,13 @@ export default function RequestsScreen() {
   );
 
   const filtered = data?.getRequests || [];
+
+  useEffect(() => {
+    if (selectedRequest && requests.length > 0) {
+      const updated = requests.find((r) => r._id === selectedRequest._id);
+      if (updated) setSelectedRequest(updated);
+    }
+  }, [data]);
 
   const handleCreateRequest = async () => {
     let location = DEFAULT_LOCATION;
@@ -432,26 +548,102 @@ export default function RequestsScreen() {
               </View>
             </ScrollView>
 
-            {selectedRequest?.status === "pending" && (
-              <TouchableOpacity
-                style={styles.volunteerBtn}
-                onPress={() =>
-                  volunteerForRequest({
-                    variables: { requestId: selectedRequest._id },
-                  })
-                }
-                disabled={volunteerLoading}
-              >
-                {volunteerLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="hand-left" size={20} color="#fff" />
-                    <Text style={styles.volunteerBtnText}>Saya Mau Bantu!</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
+            {(() => {
+              const isOwn = selectedRequest?.userName === currentUser?.name;
+              const isVolunteered =
+                volunteeredIds.has(selectedRequest?._id) ||
+                (currentUser?._id && selectedRequest?.volunteerIds?.includes(currentUser._id));
+              const status = selectedRequest?.status;
+              const busy = volunteerLoading || activityLoading || completeLoading || deleteLoading;
+              const confirm = (title, message, onConfirm) =>
+                setConfirmModal({ visible: true, title, message, onConfirm });
+
+              if (status === "completed") {
+                return (
+                  <View style={styles.ownerCompletedBadge}>
+                    <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                    <Text style={styles.ownerCompletedText}>Request sudah selesai</Text>
+                  </View>
+                );
+              }
+
+              if (isOwn) {
+                return (
+                  <View style={styles.volunteerActionRow}>
+                    {status === "in_progress" && (
+                      <TouchableOpacity
+                        style={styles.completeBtn}
+                        onPress={() => confirm("Tandai Selesai", "Apakah request ini sudah selesai ditangani?", () => completeRequest({ variables: { id: selectedRequest._id } }))}
+                        disabled={busy}
+                      >
+                        {completeLoading ? <ActivityIndicator color="#fff" size="small" /> : (
+                          <>
+                            <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                            <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {status === "pending" && (
+                      <TouchableOpacity
+                        style={[styles.cancelBtn, { flex: 1 }]}
+                        onPress={() => confirm("Batalkan Request", "Apakah kamu yakin ingin membatalkan request ini?", () => deleteRequest({ variables: { id: selectedRequest._id } }))}
+                        disabled={busy}
+                      >
+                        {deleteLoading ? <ActivityIndicator color="#ef4444" size="small" /> : (
+                          <>
+                            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                            <Text style={styles.cancelBtnText}>Batalkan Request</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              }
+
+              if (!isVolunteered) {
+                return (
+                  <TouchableOpacity
+                    style={styles.volunteerBtn}
+                    onPress={() => confirm("Konfirmasi", "Apakah kamu yakin ingin membantu request ini?", () => volunteerForRequest({ variables: { requestId: selectedRequest._id } }))}
+                    disabled={busy}
+                  >
+                    {volunteerLoading ? <ActivityIndicator color="#fff" /> : (
+                      <>
+                        <Ionicons name="hand-left" size={20} color="#fff" />
+                        <Text style={styles.volunteerBtnText}>Saya Mau Bantu!</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              }
+
+              return (
+                <View style={styles.volunteerActionRow}>
+                  <TouchableOpacity
+                    style={styles.completeBtn}
+                    onPress={() => confirm("Tandai Selesai", "Apakah kamu sudah selesai membantu request ini?", handleCompleteVolunteer)}
+                    disabled={busy}
+                  >
+                    {activityLoading ? <ActivityIndicator color="#fff" size="small" /> : (
+                      <>
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => confirm("Batalkan", "Apakah kamu yakin ingin membatalkan partisipasimu?", handleCancelVolunteer)}
+                    disabled={busy}
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color="#ef4444" />
+                    <Text style={styles.cancelBtnText}>Batalkan</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -640,6 +832,36 @@ export default function RequestsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* CONFIRMATION MODAL */}
+      <Modal visible={confirmModal.visible} transparent animationType="fade">
+        <Pressable
+          style={styles.confirmOverlay}
+          onPress={() => setConfirmModal({ ...confirmModal, visible: false })}
+        >
+          <Pressable style={styles.confirmCard} onPress={() => {}}>
+            <Text style={styles.confirmTitle}>{confirmModal.title}</Text>
+            <Text style={styles.confirmMessage}>{confirmModal.message}</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmBtnCancel}
+                onPress={() => setConfirmModal({ ...confirmModal, visible: false })}
+              >
+                <Text style={styles.confirmBtnCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtnOk}
+                onPress={() => {
+                  setConfirmModal({ ...confirmModal, visible: false });
+                  confirmModal.onConfirm?.();
+                }}
+              >
+                <Text style={styles.confirmBtnOkText}>Ya</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -822,6 +1044,36 @@ const styles = StyleSheet.create({
   },
   volunteerBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 
+  volunteerActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  completeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#22c55e",
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  completeBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  cancelBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#fef2f2",
+    borderRadius: 12,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  cancelBtnText: { fontSize: 13, fontWeight: "700", color: "#ef4444" },
+
   inputLabel: {
     fontSize: 13,
     fontWeight: "700",
@@ -877,6 +1129,59 @@ const styles = StyleSheet.create({
   },
   submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 
+  ownerCompletedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  ownerCompletedText: { fontSize: 14, fontWeight: "700", color: "#22c55e" },
+
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  confirmCard: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  confirmTitle: { fontSize: 17, fontWeight: "800", color: "#0f172a", marginBottom: 8 },
+  confirmMessage: { fontSize: 14, color: "#64748b", textAlign: "center", lineHeight: 20, marginBottom: 24 },
+  confirmActions: { flexDirection: "row", gap: 10, width: "100%" },
+  confirmBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+  },
+  confirmBtnCancelText: { fontSize: 14, fontWeight: "700", color: "#64748b" },
+  confirmBtnOk: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#3b5fca",
+    alignItems: "center",
+  },
+  confirmBtnOkText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
