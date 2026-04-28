@@ -88,6 +88,7 @@ export default function CreateScreen({ navigation }) {
   const [mapLoading, setMapLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [success, setSuccess] = useState(false);
   const mapRef = React.useRef(null);
@@ -162,18 +163,81 @@ export default function CreateScreen({ navigation }) {
     }
   };
 
+  const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  const handleSearchChange = async (text) => {
+    setSearchQuery(text);
+    if (text.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": GOOGLE_API_KEY,
+        },
+        body: JSON.stringify({ input: text, includedRegionCodes: ["id"], languageCode: "id" }),
+      });
+      const data = await res.json();
+      const predictions = (data.suggestions ?? []).map((s) => s.placePrediction).filter(Boolean);
+      setSuggestions(predictions);
+    } catch {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSelectSuggestion = async (item) => {
+    setSuggestions([]);
+    setSearchQuery(item.structuredFormat?.mainText?.text ?? item.text?.text ?? "");
+    setMapLoading(true);
+    try {
+      const detailRes = await fetch(
+        `https://places.googleapis.com/v1/${item.place}`,
+        {
+          headers: {
+            "X-Goog-Api-Key": GOOGLE_API_KEY,
+            "X-Goog-FieldMask": "location",
+          },
+        },
+      );
+      const detailData = await detailRes.json();
+      const loc = detailData.location;
+      if (!loc) return;
+      const latitude = loc.latitude;
+      const longitude = loc.longitude;
+      setPinnedLocation({ latitude, longitude });
+      mapRef.current?.animateToRegion(
+        { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        800,
+      );
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (geocode.length > 0) {
+        const g = geocode[0];
+        setForm({
+          ...form,
+          address:
+            `${g.street || ""} ${g.district || ""}, ${g.city || ""}, ${g.region || ""}`.trim(),
+        });
+      }
+    } catch (e) {
+      console.log("Place detail error:", e);
+    } finally {
+      setMapLoading(false);
+    }
+  };
+
   const handleSearchLocation = async () => {
     if (!searchQuery.trim()) return;
+    setSuggestions([]);
     setSearchLoading(true);
     try {
       const results = await Location.geocodeAsync(searchQuery);
       if (results.length > 0) {
         const { latitude, longitude } = results[0];
         setPinnedLocation({ latitude, longitude });
-        const geocode = await Location.reverseGeocodeAsync({
-          latitude,
-          longitude,
-        });
+        const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (geocode.length > 0) {
           const loc = geocode[0];
           setForm({
@@ -779,7 +843,7 @@ export default function CreateScreen({ navigation }) {
               placeholder="Cari alamat atau nama tempat..."
               placeholderTextColor="#94a3b8"
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={handleSearchChange}
               onSubmitEditing={handleSearchLocation}
               returnKeyType="search"
             />
@@ -800,14 +864,36 @@ export default function CreateScreen({ navigation }) {
             )}
           </View>
 
-          <View style={s.mapHintBar}>
-            <Ionicons
-              name="information-circle-outline"
-              size={13}
-              color="#3b82f6"
-            />
-            <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
-          </View>
+          {suggestions.length > 0 && (
+            <View style={s.suggestionBox}>
+              {suggestions.map((item, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[
+                    s.suggestionItem,
+                    i < suggestions.length - 1 && s.suggestionDivider,
+                  ]}
+                  onPress={() => handleSelectSuggestion(item)}
+                >
+                  <Ionicons name="location-outline" size={14} color="#ef4444" />
+                  <Text style={s.suggestionText} numberOfLines={2}>
+                    {item.text?.text}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {suggestions.length === 0 && (
+            <View style={s.mapHintBar}>
+              <Ionicons
+                name="information-circle-outline"
+                size={13}
+                color="#3b82f6"
+              />
+              <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
+            </View>
+          )}
 
           <MapView
             ref={mapRef}
@@ -826,9 +912,7 @@ export default function CreateScreen({ navigation }) {
             zoomControlEnabled
           >
             {pinnedLocation && (
-              <Marker coordinate={pinnedLocation}>
-                <Ionicons name="location" size={48} color="#ef4444" />
-              </Marker>
+              <Marker coordinate={pinnedLocation} pinColor="#ef4444" />
             )}
           </MapView>
 
@@ -1349,4 +1433,42 @@ const s = StyleSheet.create({
     elevation: 6,
   },
   mapConfirmText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+
+  // ── MAP SUGGESTIONS ──────────────────────────────────────────────────────
+  markerWrap: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  suggestionBox: {
+    backgroundColor: "#fff",
+    marginHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 10,
+  },
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  suggestionDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  suggestionText: {
+    fontSize: 13,
+    color: "#0f172a",
+    flex: 1,
+    lineHeight: 18,
+  },
 });
