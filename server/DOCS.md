@@ -410,15 +410,17 @@ Auto-generated zones derived from earthquake alerts, BMKG nowcast alerts, and we
 
 **Earthquake trigger** (M ≥ 5.0 only):
 
+Radii are based on seismic energy scaling (factor of 30× per magnitude level) and represent the zone of **significant shaking / potential structural impact**, not just where the earthquake is felt. M4–5 can be felt up to 200 km, so M5+ zones must be substantially larger.
+
 | Magnitude | Level | Radius | Active duration |
 |---|---|---|---|
-| 5.0 – 5.4 | moderate | 20 km | 12 h |
-| 5.5 – 5.9 | moderate | 35 km | 12 h |
-| 6.0 – 6.4 | high | 50 km | 24 h |
-| 6.5 – 6.9 | high | 75 km | 24 h |
-| 7.0 – 7.4 | extreme | 100 km | 48 h |
-| 7.5 – 7.9 | extreme | 150 km | 72 h |
-| 8.0+ | extreme | 200 km | 72 h |
+| 5.0 – 5.4 | moderate | 150 km | 12 h |
+| 5.5 – 5.9 | moderate | 200 km | 12 h |
+| 6.0 – 6.4 | high | 300 km | 24 h |
+| 6.5 – 6.9 | high | 400 km | 24 h |
+| 7.0 – 7.4 | extreme | 600 km | 48 h |
+| 7.5 – 7.9 | extreme | 800 km | 72 h |
+| 8.0+ | extreme | 1000 km | 72 h |
 
 If BMKG alerts or dangerous weather exist within 100 km, Gemini is called with all signals to produce a compound assessment (overrides the rule-based values).
 
@@ -439,7 +441,7 @@ If BMKG alerts or dangerous weather exist within 100 km, Gemini is called with a
 | Type | Name | Description |
 |---|---|---|
 | Query | `getActiveDangerZones` | All active non-expired zones |
-| Query | `getDangerZonesNear(latitude, longitude, radiusKm?)` | Zones whose centroid is within `radiusKm` of the user. Defaults to 100 km. Pass the user's `notificationRadius` from their saved `UserLocation` to scope the result to their map viewport. |
+| Query | `getDangerZonesNear(latitude, longitude, radiusKm?)` | Zones visible to the user. A zone is included if the distance from the user to the zone centroid is within **either** the user's `radiusKm` (map viewport, defaults to 100 km) **or** the zone's own `radiusKm` — whichever is larger. This ensures large-scale events (e.g. M8+ at 1000 km) are always shown to users inside the affected area regardless of their personal notification radius. |
 | Mutation | `triggerDangerZoneAnalysis` | Manually trigger a full analysis cycle |
 
 ---

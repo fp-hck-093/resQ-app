@@ -3,6 +3,7 @@ import { Field, ID, ObjectType } from '@nestjs/graphql';
 import { ObjectId } from 'mongodb';
 import { Model } from 'mongoloquent';
 import { GeoPoint } from '../../common/types/geo-point.type';
+import { VolunteerInfo } from '../dto/volunteer-info.output';
 
 export interface IRequest {
   _id?: string;
@@ -20,7 +21,7 @@ export interface IRequest {
   address: string;
   photos?: string[];
   status: 'pending' | 'in_progress' | 'completed';
-  volunteerIds?: string[];
+  volunteerIds?: ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +69,9 @@ export class Request extends Model<IRequest> {
 
   @Field(() => [String], { nullable: true })
   volunteerIds?: string[];
+
+  @Field(() => [VolunteerInfo], { nullable: true })
+  volunteers?: VolunteerInfo[];
 
   @Field(() => Date)
   createdAt: Date;

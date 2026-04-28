@@ -6,18 +6,47 @@ import {
 import { InjectModel } from '@mongoloquent/nestjs';
 import { ObjectId } from 'mongodb';
 import { Request } from './models/request.model';
+import { VolunteerInfo } from './dto/volunteer-info.output';
 import { CreateRequestInput } from './dto/create-request.input';
 import { GetRequestsFilterInput } from './dto/get-requests-filter.input';
 import { NEARBY_REQUESTS_RADIUS_KM } from '../common/constants/radius.constants';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { ActivityLogStatus } from '../activity-logs/models/activity-log.model';
+import { User } from '../users/models/user.model';
 
 @Injectable()
 export class RequestsService {
   constructor(
     @InjectModel(Request) private requestModel: typeof Request,
+    @InjectModel(User) private userModel: typeof User,
     private activityLogsService: ActivityLogsService,
   ) {}
+
+  private async attachVolunteers(requests: Request[]): Promise<Request[]> {
+    const allIds = requests.flatMap(
+      (r) => (r.volunteerIds as unknown as ObjectId[]) ?? [],
+    );
+
+    if (allIds.length === 0) return requests;
+
+    const users = await this.userModel.where('_id', { $in: allIds }).get();
+
+    const userMap = new Map(
+      (users as unknown as User[]).map((u) => [
+        u._id.toString(),
+        { _id: u._id.toString(), name: u.name },
+      ]),
+    );
+
+    for (const r of requests) {
+      const ids = (r.volunteerIds as unknown as ObjectId[]) ?? [];
+      r.volunteers = ids
+        .map((id) => userMap.get(id.toString()))
+        .filter((v): v is VolunteerInfo => v !== undefined);
+    }
+
+    return requests;
+  }
 
   async createRequest(input: CreateRequestInput): Promise<Request> {
     const validCategories = [
@@ -85,7 +114,7 @@ export class RequestsService {
               : -1;
         });
       }
-      return results;
+      return this.attachVolunteers(results);
     }
 
     const hasFilters = !!(search || category || status);
@@ -109,7 +138,7 @@ export class RequestsService {
     if (!search && category && status) query = query.where('status', status);
 
     const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
-    return results as unknown as Request[];
+    return this.attachVolunteers(results as unknown as Request[]);
   }
 
   async getRequestsByStatus(status: string): Promise<Request[]> {
@@ -132,7 +161,7 @@ export class RequestsService {
       .where('userId', new ObjectId(userId))
       .orderBy('createdAt', 'desc')
       .get();
-    return results as unknown as Request[];
+    return this.attachVolunteers(results as unknown as Request[]);
   }
 
   async getRequestById(id: string): Promise<Request> {
@@ -140,7 +169,8 @@ export class RequestsService {
     if (!result) {
       throw new NotFoundException('Request not found');
     }
-    return result;
+    const [withVolunteers] = await this.attachVolunteers([result]);
+    return withVolunteers;
   }
 
   async deleteRequest(id: string, userId: string): Promise<string> {
@@ -181,17 +211,16 @@ export class RequestsService {
       throw new BadRequestException('Cannot volunteer for a completed request');
     }
 
-    const currentIds: string[] = (
-      (request.volunteerIds as unknown as string[]) ?? []
-    ).map(String);
+    const currentIds: ObjectId[] =
+      (request.volunteerIds as unknown as ObjectId[]) ?? [];
 
-    if (currentIds.includes(volunteerId)) {
+    if (currentIds.map((id) => id.toString()).includes(volunteerId)) {
       throw new BadRequestException(
         'You have already volunteered for this request',
       );
     }
 
-    const updatedIds = [...currentIds, volunteerId];
+    const updatedIds = [...currentIds, new ObjectId(volunteerId)];
 
     if (request.status === 'pending') {
       await request
@@ -203,7 +232,8 @@ export class RequestsService {
 
     await this.activityLogsService.create(volunteerId, requestId);
 
-    return request;
+    const [withVolunteers] = await this.attachVolunteers([request]);
+    return withVolunteers;
   }
 
   async updateRequestStatus(id: string, userId: string): Promise<Request> {
@@ -229,6 +259,7 @@ export class RequestsService {
       ActivityLogStatus.COMPLETED,
     );
 
-    return request;
+    const [withVolunteers] = await this.attachVolunteers([request]);
+    return withVolunteers;
   }
 }
