@@ -94,8 +94,8 @@ const CATEGORY_CONFIG = {
   "Money/Item": { color: "#22c55e", bg: "#f0fdf4", icon: "cash" },
 };
 
-export default function ActivityScreen() {
-  const [activeTab, setActiveTab] = useState("volunteer");
+export default function ActivityScreen({ route }) {
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || "volunteer");
 
   const {
     data: activitiesData,
