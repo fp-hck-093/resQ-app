@@ -335,9 +335,7 @@ export default function CreateScreen({ navigation }) {
           numberOfPeople: parseInt(form.numberOfPeople) || 1,
           location: {
             type: "Point",
-            coordinates: pinnedLocation
-              ? [pinnedLocation.longitude, pinnedLocation.latitude]
-              : [106.8456, -6.2088],
+            coordinates: [pinnedLocation.longitude, pinnedLocation.latitude],
           },
           address: form.address || "Lokasi tidak tersedia",
           photos: photos.filter((p) => p.url).map((p) => p.url),
@@ -346,7 +344,10 @@ export default function CreateScreen({ navigation }) {
     });
   };
 
-  const isValid = form.category !== "" && form.description.trim() !== "";
+  const isValid =
+    form.category !== "" &&
+    form.description.trim() !== "" &&
+    pinnedLocation !== null;
   const selectedCat = CATEGORIES.find((c) => c.key === form.category);
 
   // ─── SUCCESS ─────────────────────────────────────────────────────────────
@@ -758,7 +759,9 @@ export default function CreateScreen({ navigation }) {
             <View style={s.validHint}>
               <Ionicons name="alert-circle-outline" size={13} color="#f97316" />
               <Text style={s.validHintText}>
-                {!form.category
+                {!pinnedLocation
+                  ? "📍 Pilih lokasi terlebih dahulu"
+                  : !form.category
                   ? "👆 Pilih kategori bantuan terlebih dahulu"
                   : "✏️ Tambahkan deskripsi situasimu"}
               </Text>
