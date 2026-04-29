@@ -736,7 +736,7 @@ export default function RequestsScreen() {
 
             <Text style={styles.sortLabel}>Status</Text>
             <View style={styles.sortRow}>
-              {["All", "pending", "in_progress", "completed"].map((s) => (
+              {["All", "pending", "in_progress"].map((s) => (
                 <TouchableOpacity
                   key={s}
                   style={[styles.sortChip, selectedStatus === s && styles.sortChipActive]}

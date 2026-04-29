@@ -3,9 +3,9 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Easing,
   Image,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,9 +20,14 @@ import { gql } from "@apollo/client";
 import { useQuery } from "@apollo/client/react";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 const { width, height } = Dimensions.get("window");
+// Progress bar width = screen - floating card margins (12 each side) - card padding cancels with negative margin
+const WEATHER_BAR_WIDTH = width - 24;
 
 const GET_NEARBY_REQUESTS = gql`
   query GetRequests($filter: GetRequestsFilterInput) {
@@ -83,6 +88,7 @@ const GET_MY_LOCATIONS = gql`
       _id
       address
       city
+      notifyOnDangerZones
       location {
         coordinates
       }
@@ -133,6 +139,22 @@ const GET_EARTHQUAKE_ALERTS = gql`
   }
 `;
 
+const GET_WEATHER_LOGS = gql`
+  query GetWeatherLogs {
+    getWeatherLogs {
+      _id
+      province
+      city
+      condition
+      windKph
+      precipMm
+      humidity
+      visibilityKm
+      isDangerous
+    }
+  }
+`;
+
 const CATEGORY_CONFIG = {
   Rescue: { color: "#ef4444", icon: "warning", bg: "#fef2f2" },
   Shelter: { color: "#8b5cf6", icon: "home", bg: "#f5f3ff" },
@@ -141,11 +163,41 @@ const CATEGORY_CONFIG = {
   "Money/Item": { color: "#22c55e", icon: "cash", bg: "#f0fdf4" },
 };
 
+function getWeatherEmoji(condition) {
+  const c = (condition || "").toLowerCase();
+  if (c.includes("thunder") || c.includes("storm")) return "⛈️";
+  if (c.includes("heavy rain") || c.includes("heavy shower")) return "🌧️";
+  if (c.includes("rain") || c.includes("drizzle") || c.includes("shower"))
+    return "🌦️";
+  if (c.includes("snow") || c.includes("blizzard") || c.includes("sleet"))
+    return "❄️";
+  if (c.includes("fog") || c.includes("mist") || c.includes("haze"))
+    return "🌫️";
+  if (c.includes("overcast")) return "☁️";
+  if (c.includes("cloud") || c.includes("partly")) return "⛅";
+  if (c.includes("sunny") || c.includes("clear")) return "☀️";
+  return "🌤️";
+}
+
 const DANGER_LEVEL_CONFIG = {
-  extreme:  { color: "#7f1d1d", fill: "rgba(127,29,29,0.15)",  stroke: "rgba(127,29,29,0.8)",  pinColor: "#7f1d1d" },
-  high:     { color: "#ef4444", fill: "rgba(239,68,68,0.12)",  stroke: "rgba(239,68,68,0.7)",  pinColor: "#ef4444" },
-  moderate: { color: "#f97316", fill: "rgba(249,115,22,0.10)", stroke: "rgba(249,115,22,0.6)", pinColor: "#f97316" },
-  low:      { color: "#eab308", fill: "rgba(234,179,8,0.08)",  stroke: "rgba(234,179,8,0.5)",  pinColor: "#eab308" },
+  extreme: {
+    color: "#7f1d1d",
+    fill: "rgba(127,29,29,0.15)",
+    stroke: "rgba(127,29,29,0.8)",
+    pinColor: "#7f1d1d",
+  },
+  severe: {
+    color: "#ef4444",
+    fill: "rgba(239,68,68,0.12)",
+    stroke: "rgba(239,68,68,0.7)",
+    pinColor: "#ef4444",
+  },
+  moderate: {
+    color: "#f97316",
+    fill: "rgba(249,115,22,0.10)",
+    stroke: "rgba(249,115,22,0.6)",
+    pinColor: "#f97316",
+  },
 };
 
 const STATUS_CONFIG = {
@@ -176,16 +228,21 @@ export default function HomeScreen({ navigation }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAllZones, setShowAllZones] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [weatherIndex, setWeatherIndex] = useState(0);
+  const weatherFadeAnim = useRef(new Animated.Value(1)).current;
+  const weatherProgressAnim = useRef(new Animated.Value(0)).current;
 
-  const {
-    data: requestsData,
-    refetch,
-  } = useQuery(GET_NEARBY_REQUESTS, {
+  const { data: requestsData, refetch } = useQuery(GET_NEARBY_REQUESTS, {
     variables: userLocation
-      ? { filter: { latitude: userLocation.latitude, longitude: userLocation.longitude } }
+      ? {
+          filter: {
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+          },
+        }
       : {},
     skip: !userLocation,
-    fetchPolicy: 'network-only',
+    fetchPolicy: "network-only",
     pollInterval: 30000,
   });
   const { data: bmkgData } = useQuery(GET_BMKG_ALERTS, {
@@ -195,7 +252,7 @@ export default function HomeScreen({ navigation }) {
     pollInterval: 300000,
   });
   const { data: dangerZonesAllData } = useQuery(GET_ACTIVE_DANGER_ZONES, {
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: "cache-and-network",
     pollInterval: 300000,
   });
   const { data: dangerZonesNearData } = useQuery(GET_DANGER_ZONES_NEAR, {
@@ -203,30 +260,42 @@ export default function HomeScreen({ navigation }) {
       ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
       : {},
     skip: !userLocation || showAllZones,
-    fetchPolicy: 'network-only',
+    fetchPolicy: "network-only",
     pollInterval: 300000,
   });
-  const { data: myLocationsData } = useQuery(GET_MY_LOCATIONS, {
-    fetchPolicy: 'cache-and-network',
+  const { data: weatherLogsData } = useQuery(GET_WEATHER_LOGS, {
+    fetchPolicy: "cache-and-network",
     pollInterval: 300000,
   });
+  const { data: myLocationsData, refetch: refetchMyLocations } = useQuery(
+    GET_MY_LOCATIONS,
+    { fetchPolicy: "cache-and-network", pollInterval: 300000 },
+  );
   const savedLocations = myLocationsData?.getMyLocations || [];
   const savedCoordinates = savedLocations
-    .filter((l) => l.location?.coordinates?.length === 2)
+    .filter(
+      (l) =>
+        l.location?.coordinates?.length === 2 &&
+        l.notifyOnDangerZones !== false,
+    )
     .map((l) => ({
       latitude: l.location.coordinates[1],
       longitude: l.location.coordinates[0],
     }));
-  const { data: dangerZonesSavedData } = useQuery(GET_DANGER_ZONES_FOR_LOCATIONS, {
-    variables: { locations: savedCoordinates },
-    skip: showAllZones || savedCoordinates.length === 0,
-    fetchPolicy: 'network-only',
-    pollInterval: 300000,
-  });
+  const { data: dangerZonesSavedData } = useQuery(
+    GET_DANGER_ZONES_FOR_LOCATIONS,
+    {
+      variables: { locations: savedCoordinates },
+      skip: showAllZones || savedCoordinates.length === 0,
+      fetchPolicy: "network-only",
+      pollInterval: 300000,
+    },
+  );
 
-  // Get user location every time screen is focused (including after login)
+  // Refresh location + saved-location toggles every time this screen gains focus
   useFocusEffect(
     useCallback(() => {
+      refetchMyLocations();
       (async () => {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
@@ -266,11 +335,13 @@ export default function HomeScreen({ navigation }) {
       }
     });
     // App is foregrounded and user taps a notification
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      if (response.notification.request.content.data?.screen === "Home") {
-        navigation.navigate("Home");
-      }
-    });
+    const sub = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        if (response.notification.request.content.data?.screen === "Home") {
+          navigation.navigate("Home");
+        }
+      },
+    );
     return () => sub.remove();
   }, []);
 
@@ -293,13 +364,63 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  const weatherLogs = weatherLogsData?.getWeatherLogs || [];
+  const currentWeather = weatherLogs[weatherIndex] ?? null;
+
+  // Auto-advance carousel every 5 s with smooth fade transition
+  // Single effect owns both carousel advance and progress bar so they never desync
+  useEffect(() => {
+    if (weatherLogs.length <= 1) return;
+
+    let progressAnim = null;
+
+    const startProgress = () => {
+      if (progressAnim) progressAnim.stop();
+      weatherProgressAnim.setValue(0);
+      progressAnim = Animated.timing(weatherProgressAnim, {
+        toValue: 1,
+        duration: 5000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+      progressAnim.start();
+    };
+
+    startProgress();
+
+    const timer = setInterval(() => {
+      Animated.timing(weatherFadeAnim, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => {
+        setWeatherIndex((i) => (i + 1) % weatherLogs.length);
+        startProgress();
+        Animated.timing(weatherFadeAnim, {
+          toValue: 1,
+          duration: 350,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 5000);
+
+    return () => {
+      clearInterval(timer);
+      if (progressAnim) progressAnim.stop();
+    };
+  }, [weatherLogs.length]);
+
   const requests = requestsData?.getRequests || [];
   const bmkgAlerts = bmkgData?.getActiveBmkgAlerts || [];
   const earthquakes = earthquakeData?.getEarthquakeAlerts || [];
   const dangerZonesRaw = showAllZones
-    ? (dangerZonesAllData?.getActiveDangerZones || [])
-    : (dangerZonesNearData?.getDangerZonesNear || []);
-  const dangerZonesSaved = showAllZones ? [] : (dangerZonesSavedData?.getDangerZonesForLocations || []);
+    ? dangerZonesAllData?.getActiveDangerZones || []
+    : dangerZonesNearData?.getDangerZonesNear || [];
+  const dangerZonesSaved = showAllZones
+    ? []
+    : dangerZonesSavedData?.getDangerZonesForLocations || [];
 
   // Merge current-location zones + saved-location zones (deduplicate by _id)
   const mergedZones = [...dangerZonesRaw];
@@ -310,23 +431,29 @@ export default function HomeScreen({ navigation }) {
 
   // Display filter: show zone if user's current location OR any saved location is inside it
   const allWatchCoords = [
-    ...(userLocation ? [{ latitude: userLocation.latitude, longitude: userLocation.longitude }] : []),
+    ...(userLocation
+      ? [{ latitude: userLocation.latitude, longitude: userLocation.longitude }]
+      : []),
     ...savedCoordinates,
   ];
-  const dangerZones = (!showAllZones && allWatchCoords.length > 0)
-    ? mergedZones.filter((z) => {
-        if (!z.location?.coordinates) return false;
-        const [zLon, zLat] = z.location.coordinates;
-        return allWatchCoords.some(
-          (loc) => haversineKm(loc.latitude, loc.longitude, zLat, zLon) <= z.radiusKm,
-        );
-      })
-    : mergedZones;
-  console.log('[DangerZones] current:', dangerZonesRaw.length, '| saved:', dangerZonesSaved.length, '| displayed:', dangerZones.length);
+  const dangerZones =
+    !showAllZones && allWatchCoords.length > 0
+      ? mergedZones.filter((z) => {
+          if (!z.location?.coordinates) return false;
+          const [zLon, zLat] = z.location.coordinates;
+          return allWatchCoords.some(
+            (loc) =>
+              haversineKm(loc.latitude, loc.longitude, zLat, zLon) <=
+              z.radiusKm,
+          );
+        })
+      : mergedZones;
 
   const dangerousAlerts = bmkgAlerts.filter((a) => a.isDangerous);
   const latestEarthquake = earthquakes[0];
-  const highDangerZones = dangerZones.filter((z) => z.level === "high" || z.level === "extreme");
+  const highDangerZones = dangerZones.filter(
+    (z) => z.level === "severe" || z.level === "extreme",
+  );
   const allAlerts = [
     ...highDangerZones.map((z) => ({
       id: z._id,
@@ -358,14 +485,16 @@ export default function HomeScreen({ navigation }) {
     dangerZones.map((zone) => {
       if (!zone.location?.coordinates) return null;
       const [longitude, latitude] = zone.location.coordinates;
-      const cfg = DANGER_LEVEL_CONFIG[zone.level] || DANGER_LEVEL_CONFIG.low;
+      const cfg = DANGER_LEVEL_CONFIG[zone.level] || DANGER_LEVEL_CONFIG.moderate;
       const isFromSaved = savedZoneIds.has(zone._id);
       // find which saved location name this zone covers (for the callout)
       const savedMatch = isFromSaved
         ? savedLocations.find((loc) => {
             if (!loc.location?.coordinates) return false;
             const [lLon, lLat] = loc.location.coordinates;
-            return haversineKm(lLat, lLon, latitude, longitude) <= zone.radiusKm;
+            return (
+              haversineKm(lLat, lLon, latitude, longitude) <= zone.radiusKm
+            );
           })
         : null;
       return (
@@ -462,25 +591,74 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.logoText}>ResQ</Text>
           </View>
 
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.notifBtn}>
-              <Ionicons name="notifications" size={20} color="#0f172a" />
-              {dangerousAlerts.length > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>
-                    {dangerousAlerts.length}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
         </View>
-
       </SafeAreaView>
 
+      {/* ── WEATHER CAROUSEL (floating, below header) ── */}
+      <View style={[styles.weatherFloating, { top: insets.top + 68 }]}>
+        {!currentWeather ? (
+          <View style={styles.weatherNoDataCard}>
+            <Ionicons name="cloud-offline-outline" size={14} color="#64748b" />
+            <Text style={styles.weatherNoDataText}>Belum ada data cuaca</Text>
+          </View>
+        ) : (
+          <Animated.View style={{ opacity: weatherFadeAnim, borderRadius: 18, overflow: "hidden" }}>
+            <LinearGradient
+              colors={
+                currentWeather.isDangerous
+                  ? ["#7f1d1d", "#dc2626"]
+                  : ["#1e3a8a", "#3b5fca"]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.weatherCarouselCard}
+            >
+              {/* Row: emoji + info */}
+              <View style={styles.weatherCarouselRow}>
+                <Text style={styles.weatherCardEmoji}>
+                  {getWeatherEmoji(currentWeather.condition)}
+                </Text>
+                <View style={styles.weatherCarouselContent}>
+                  <Text style={styles.weatherCardCity}>
+                    {currentWeather.province
+                      ? `${currentWeather.province} - ${currentWeather.city}`
+                      : currentWeather.city}
+                  </Text>
+                  <Text style={styles.weatherCardLabel}>{currentWeather.condition}</Text>
+                  <View style={styles.weatherCardStatsRow}>
+                    <Text style={styles.weatherCardStat}>💨 {Math.round(currentWeather.windKph)} km/h</Text>
+                    <Text style={styles.weatherCardStat}>🌧️ {currentWeather.precipMm} mm</Text>
+                    <Text style={styles.weatherCardStat}>💧 {currentWeather.humidity}%</Text>
+                    <Text style={styles.weatherCardStat}>👁️ {currentWeather.visibilityKm} km</Text>
+                  </View>
+                </View>
+              </View>
+              {/* Progress bar — scaleX on native thread, left-anchored via translateX */}
+              <View style={styles.weatherProgressTrack}>
+                <Animated.View
+                  style={[
+                    styles.weatherProgressBar,
+                    {
+                      transform: [
+                        {
+                          translateX: weatherProgressAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-WEATHER_BAR_WIDTH / 2, 0],
+                          }),
+                        },
+                        { scaleX: weatherProgressAnim },
+                      ],
+                    },
+                  ]}
+                />
+              </View>
+            </LinearGradient>
+          </Animated.View>
+        )}
+      </View>
 
       {/* ── MAP CONTROLS (kanan bawah) ── */}
-      <View style={[styles.mapControls, { bottom: 180 + insets.bottom }]}>
+      <View style={[styles.mapControls, { bottom: 90 + insets.bottom }]}>
         <TouchableOpacity style={styles.mapControlBtn} onPress={handleLocate}>
           <Ionicons name="locate" size={18} color="#3b5fca" />
         </TouchableOpacity>
@@ -491,35 +669,53 @@ export default function HomeScreen({ navigation }) {
           <Ionicons name="refresh" size={18} color="#3b5fca" />
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.mapControlBtn, showAllZones && styles.mapControlBtnActive]}
+          style={[
+            styles.mapControlBtn,
+            showAllZones && styles.mapControlBtnActive,
+          ]}
           onPress={() => setShowAllZones((v) => !v)}
         >
-          <Ionicons name="globe-outline" size={18} color={showAllZones ? "#fff" : "#3b5fca"} />
+          <Ionicons
+            name="globe-outline"
+            size={18}
+            color={showAllZones ? "#fff" : "#3b5fca"}
+          />
         </TouchableOpacity>
       </View>
 
       {/* ── LEGEND TOGGLE (kiri bawah) ── */}
-      <View style={[styles.legendControls, { bottom: 180 + insets.bottom }]}>
+      <View style={[styles.legendControls, { bottom: 90 + insets.bottom }]}>
         <TouchableOpacity
-          style={[styles.mapControlBtn, showLegend && styles.mapControlBtnActive]}
+          style={[
+            styles.mapControlBtn,
+            showLegend && styles.mapControlBtnActive,
+          ]}
           onPress={() => setShowLegend((v) => !v)}
         >
-          <Ionicons name="layers-outline" size={18} color={showLegend ? "#fff" : "#3b5fca"} />
+          <Ionicons
+            name="layers-outline"
+            size={18}
+            color={showLegend ? "#fff" : "#3b5fca"}
+          />
         </TouchableOpacity>
       </View>
 
       {/* ── LEGEND PANEL ── */}
       {showLegend && (
-        <View style={[styles.legendPanel, { bottom: 232 + insets.bottom }]}>
+        <View style={[styles.legendPanel, { bottom: 142 + insets.bottom }]}>
           <Text style={styles.legendPanelTitle}>Zona Bahaya</Text>
           {[
             { level: "extreme", label: "Ekstrem" },
-            { level: "high",    label: "Tinggi" },
-            { level: "moderate",label: "Sedang" },
-            { level: "low",     label: "Rendah" },
+            { level: "severe", label: "Parah" },
+            { level: "moderate", label: "Sedang" },
           ].map(({ level, label }) => (
             <View key={level} style={styles.legendRow}>
-              <View style={[styles.legendColorDot, { backgroundColor: DANGER_LEVEL_CONFIG[level].color }]} />
+              <View
+                style={[
+                  styles.legendColorDot,
+                  { backgroundColor: DANGER_LEVEL_CONFIG[level].color },
+                ]}
+              />
               <Text style={styles.legendRowText}>{label}</Text>
             </View>
           ))}
@@ -530,12 +726,16 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
+
       {/* ── SELECTED REQUEST CARD ── */}
       {selectedRequest && (
         <Animated.View
           style={[
             styles.requestCard,
-            { transform: [{ translateY: slideAnim }], bottom: 75 + insets.bottom },
+            {
+              transform: [{ translateY: slideAnim }],
+              bottom: 75 + insets.bottom,
+            },
           ]}
         >
           <View style={styles.requestCardHandle} />
@@ -755,21 +955,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0f172a",
   },
-
-  headerRight: { flex: 1, alignItems: "flex-end" },
-  notifBtn: { position: "relative", padding: 4 },
-  notifBadge: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#ef4444",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifBadgeText: { fontSize: 9, fontWeight: "800", color: "#fff" },
 
 
   // Map Controls
@@ -1046,5 +1231,85 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#94a3b8",
     fontStyle: "italic",
+  },
+
+  // Weather carousel (floating)
+  weatherFloating: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    zIndex: 9,
+    borderRadius: 18,
+    shadowColor: "#1e3a8a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  weatherNoDataCard: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  weatherNoDataText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+  weatherCarouselCard: {
+    borderRadius: 18,
+    paddingTop: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 0,
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  weatherCarouselRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingBottom: 10,
+  },
+  weatherCarouselContent: {
+    flex: 1,
+  },
+  weatherProgressTrack: {
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    overflow: "hidden",
+    marginHorizontal: -14,
+    marginTop: 10,
+  },
+  weatherProgressBar: {
+    height: 3,
+    width: WEATHER_BAR_WIDTH,
+    backgroundColor: "rgba(255,255,255,0.85)",
+  },
+  weatherCardEmoji: {
+    fontSize: 32,
+  },
+  weatherCardCity: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  weatherCardLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.8)",
+    marginBottom: 5,
+  },
+  weatherCardStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  weatherCardStat: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
   },
 });
