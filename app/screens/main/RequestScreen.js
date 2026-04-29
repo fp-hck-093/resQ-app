@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -39,12 +40,24 @@ const GET_ALL_REQUESTS = gql`
       address
       numberOfPeople
       urgencyScore
+      userId
       userName
       createdAt
       volunteerIds
       location {
         type
         coordinates
+      }
+    }
+  }
+`;
+
+const GET_MY_ACTIVITY_LOGS = gql`
+  query GetMyActivityLogs {
+    getMyActivityLogs(page: 1, limit: 100) {
+      data {
+        requestId
+        status
       }
     }
   }
@@ -131,10 +144,12 @@ function getUrgencyConfig(score) {
 
 export default function RequestsScreen() {
   const insets = useSafeAreaInsets();
+  const bottomSafe = Math.max(insets.bottom, 36);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [volunteeredIds, setVolunteeredIds] = useState(new Set());
+  const [myCompletedIds, setMyCompletedIds] = useState(new Set());
   const [confirmModal, setConfirmModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -163,6 +178,9 @@ export default function RequestsScreen() {
     variables: { filter },
     pollInterval: 30000,
   });
+  const { data: activityData, refetch: refetchActivities } = useQuery(
+    GET_MY_ACTIVITY_LOGS,
+  );
 
   const [volunteerForRequest, { loading: volunteerLoading }] = useMutation(
     VOLUNTEER_FOR_REQUEST,
@@ -187,17 +205,28 @@ export default function RequestsScreen() {
 
   const handleCompleteVolunteer = () => {
     const rid = selectedRequest._id;
+    setMyCompletedIds((prev) => new Set([...prev, rid]));
     updateActivityStatus({
       variables: { requestId: rid, status: "COMPLETED" },
       onCompleted: () => {
         refetch();
-        setSelectedRequest((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "completed",
-              }
-            : prev,
+        refetchActivities();
+      },
+      onError: (error) => {
+        if (error.message?.includes("completed activity")) {
+          setMyCompletedIds((prev) => new Set([...prev, rid]));
+          refetchActivities();
+          return;
+        }
+
+        setMyCompletedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        Alert.alert(
+          "Gagal",
+          error.message || "Tidak bisa menandai bantuan sebagai selesai.",
         );
       },
     });
@@ -209,7 +238,13 @@ export default function RequestsScreen() {
       variables: { requestId: rid, status: "CANCELLED" },
       onCompleted: () => {
         refetch();
+        refetchActivities();
         setVolunteeredIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        setMyCompletedIds((prev) => {
           const next = new Set(prev);
           next.delete(rid);
           return next;
@@ -261,6 +296,12 @@ export default function RequestsScreen() {
   );
 
   const filtered = data?.getRequests || [];
+  const completedActivityIds = new Set([
+    ...myCompletedIds,
+    ...((activityData?.getMyActivityLogs?.data || [])
+      .filter((activity) => activity.status?.toLowerCase() === "completed")
+      .map((activity) => activity.requestId)),
+  ]);
 
   useEffect(() => {
     if (selectedRequest && filtered.length > 0) {
@@ -475,7 +516,7 @@ export default function RequestsScreen() {
       <Modal visible={!!selectedRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View
-            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
+            style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
@@ -549,7 +590,7 @@ export default function RequestsScreen() {
             </ScrollView>
 
             {(() => {
-              const isOwn = selectedRequest?.userName === currentUser?.name;
+              const isOwn = selectedRequest?.userId === currentUser?._id;
               const isVolunteered =
                 volunteeredIds.has(selectedRequest?._id) ||
                 (currentUser?._id && selectedRequest?.volunteerIds?.includes(currentUser._id));
@@ -567,19 +608,24 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Requester buttons
               if (isOwn) {
                 return (
                   <View style={styles.volunteerActionRow}>
                     {status === "in_progress" && (
                       <TouchableOpacity
                         style={styles.completeBtn}
-                        onPress={() => confirm("Tandai Selesai", "Apakah request ini sudah selesai ditangani?", () => completeRequest({ variables: { id: selectedRequest._id } }))}
+                        onPress={() => confirm(
+                          "Selesaikan Request",
+                          "Apakah bantuan sudah kamu terima dan request ini selesai?",
+                          () => completeRequest({ variables: { id: selectedRequest._id } }),
+                        )}
                         disabled={busy}
                       >
                         {completeLoading ? <ActivityIndicator color="#fff" size="small" /> : (
                           <>
                             <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                            <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                            <Text style={styles.completeBtnText}>Request Selesai</Text>
                           </>
                         )}
                       </TouchableOpacity>
@@ -587,7 +633,11 @@ export default function RequestsScreen() {
                     {status === "pending" && (
                       <TouchableOpacity
                         style={[styles.cancelBtn, { flex: 1 }]}
-                        onPress={() => confirm("Batalkan Request", "Apakah kamu yakin ingin membatalkan request ini?", () => deleteRequest({ variables: { id: selectedRequest._id } }))}
+                        onPress={() => confirm(
+                          "Batalkan Request",
+                          "Apakah kamu yakin ingin membatalkan request ini?",
+                          () => deleteRequest({ variables: { id: selectedRequest._id } }),
+                        )}
                         disabled={busy}
                       >
                         {deleteLoading ? <ActivityIndicator color="#ef4444" size="small" /> : (
@@ -602,11 +652,26 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Volunteer — already completed their part
+              if (completedActivityIds.has(selectedRequest?._id)) {
+                return (
+                  <View style={styles.ownerCompletedBadge}>
+                    <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                    <Text style={styles.ownerCompletedText}>Terima kasih telah membantu</Text>
+                  </View>
+                );
+              }
+
+              // Volunteer — not yet joined
               if (!isVolunteered) {
                 return (
                   <TouchableOpacity
                     style={styles.volunteerBtn}
-                    onPress={() => confirm("Konfirmasi", "Apakah kamu yakin ingin membantu request ini?", () => volunteerForRequest({ variables: { requestId: selectedRequest._id } }))}
+                    onPress={() => confirm(
+                      "Konfirmasi",
+                      "Apakah kamu yakin ingin membantu request ini?",
+                      () => volunteerForRequest({ variables: { requestId: selectedRequest._id } }),
+                    )}
                     disabled={busy}
                   >
                     {volunteerLoading ? <ActivityIndicator color="#fff" /> : (
@@ -619,23 +684,32 @@ export default function RequestsScreen() {
                 );
               }
 
+              // Volunteer — already joined
               return (
                 <View style={styles.volunteerActionRow}>
                   <TouchableOpacity
                     style={styles.completeBtn}
-                    onPress={() => confirm("Tandai Selesai", "Apakah kamu sudah selesai membantu request ini?", handleCompleteVolunteer)}
+                    onPress={() => confirm(
+                      "Selesai Membantu",
+                      "Tandai partisipasimu sebagai selesai?",
+                      handleCompleteVolunteer,
+                    )}
                     disabled={busy}
                   >
                     {activityLoading ? <ActivityIndicator color="#fff" size="small" /> : (
                       <>
                         <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                        <Text style={styles.completeBtnText}>Tandai Selesai</Text>
+                        <Text style={styles.completeBtnText}>Selesai Membantu</Text>
                       </>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.cancelBtn}
-                    onPress={() => confirm("Batalkan", "Apakah kamu yakin ingin membatalkan partisipasimu?", handleCancelVolunteer)}
+                    onPress={() => confirm(
+                      "Batalkan Partisipasi",
+                      "Apakah kamu yakin ingin membatalkan partisipasimu?",
+                      handleCancelVolunteer,
+                    )}
                     disabled={busy}
                   >
                     <Ionicons name="close-circle-outline" size={18} color="#ef4444" />
@@ -651,7 +725,7 @@ export default function RequestsScreen() {
       {/* SORT & FILTER MODAL */}
       <Modal visible={showFilterModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+          <View style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filter & Sort</Text>
@@ -662,7 +736,7 @@ export default function RequestsScreen() {
 
             <Text style={styles.sortLabel}>Status</Text>
             <View style={styles.sortRow}>
-              {["All", "pending", "in_progress", "completed"].map((s) => (
+              {["All", "pending", "in_progress"].map((s) => (
                 <TouchableOpacity
                   key={s}
                   style={[styles.sortChip, selectedStatus === s && styles.sortChipActive]}
@@ -738,7 +812,7 @@ export default function RequestsScreen() {
       <Modal visible={showCreateModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View
-            style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}
+            style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Minta Bantuan</Text>

@@ -6,8 +6,10 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@mongoloquent/nestjs';
+import { ObjectId } from 'mongodb';
 import { EarthquakeAlert } from './models/earthquake-alert.model';
 import { BmkgAlert } from './models/bmkg-alert.model';
+import { BmkgPolygonCentroid } from './models/bmkg-polygon-centroid.model';
 
 const EARTHQUAKE_URL = 'https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json';
 const BMKG_RSS_URL = 'https://www.bmkg.go.id/alerts/nowcast/en/rss.xml';
@@ -38,6 +40,17 @@ function extractAllTags(xml: string, tag: string): string[] {
     results.push(m[1].trim());
   }
   return results;
+}
+
+function polygonCentroid(polygon: number[][][]): [number, number] {
+  const ring = polygon[0];
+  let sumLon = 0;
+  let sumLat = 0;
+  for (const point of ring) {
+    sumLon += point[0];
+    sumLat += point[1];
+  }
+  return [sumLon / ring.length, sumLat / ring.length];
 }
 
 function parsePolygons(polygons: string[]): number[][][][] {
@@ -74,6 +87,8 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
     private earthquakeModel: typeof EarthquakeAlert,
     @InjectModel(BmkgAlert)
     private bmkgAlertModel: typeof BmkgAlert,
+    @InjectModel(BmkgPolygonCentroid)
+    private centroidModel: typeof BmkgPolygonCentroid,
   ) {}
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -115,10 +130,17 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
     for (const alert of stale as unknown as BmkgAlert[]) {
       await this.bmkgAlertModel.destroy(alert._id.toString());
     }
-    if ((stale as unknown[]).length > 0) {
-      this.logger.log(
-        `[Nowcast] purged ${(stale as unknown[]).length} expired alert(s)`,
-      );
+
+    const staleCentroids = await this.centroidModel
+      .where('expires', { $lt: cutoff })
+      .get();
+    for (const c of staleCentroids as unknown as { _id: string }[]) {
+      await this.centroidModel.destroy(c._id.toString());
+    }
+
+    const purged = (stale as unknown[]).length;
+    if (purged > 0) {
+      this.logger.log(`[Nowcast] purged ${purged} expired alert(s)`);
     }
   }
 
@@ -238,7 +260,18 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
         fetchedAt: new Date(),
       });
 
-      stored.push(result as unknown as BmkgAlert);
+      const alert = result as unknown as BmkgAlert;
+      for (const polygon of coordinates) {
+        const [cLon, cLat] = polygonCentroid(polygon);
+        await this.centroidModel.create({
+          alertId: new ObjectId(alert._id.toString()),
+          centroid: { type: 'Point', coordinates: [cLon, cLat] },
+          severity,
+          isDangerous,
+          expires,
+        });
+      }
+      stored.push(alert);
     }
 
     return stored;

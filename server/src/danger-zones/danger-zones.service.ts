@@ -4,20 +4,23 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { InjectModel } from '@mongoloquent/nestjs';
+import { InjectDB, InjectModel } from '@mongoloquent/nestjs';
 import { ConfigService } from '@nestjs/config';
 import { ObjectId } from 'mongodb';
+import { DB } from 'mongoloquent';
 import { DangerZone, IDangerZone } from './models/danger-zone.model';
 import { EarthquakeAlert } from '../bmkg-logs/models/earthquake-alert.model';
 import { BmkgAlert } from '../bmkg-logs/models/bmkg-alert.model';
 import { WeatherLog } from '../weather/models/weather-log.model';
 import { Request } from '../requests/models/request.model';
+import { UserLocation } from '../locations/models/locations.model';
+import { User } from '../users/models/user.model';
+import { NotificationsService } from '../notifications/notifications.service';
 
-// eslint-disable-next-line max-len
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
-const NEARBY_KM = 100;
+const NEARBY_KM = 500;
 const REQUEST_DENSITY_RADIUS_KM = 20;
 
 interface GeminiResult {
@@ -75,6 +78,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
   private pollingTimer: NodeJS.Timeout;
 
   constructor(
+    @InjectDB() private db: DB,
     @InjectModel(DangerZone)
     private dangerZoneModel: typeof DangerZone,
     @InjectModel(EarthquakeAlert)
@@ -85,6 +89,11 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     private weatherLogModel: typeof WeatherLog,
     @InjectModel(Request)
     private requestModel: typeof Request,
+    @InjectModel(UserLocation)
+    private userLocationModel: typeof UserLocation,
+    @InjectModel(User)
+    private userModel: typeof User,
+    private notificationsService: NotificationsService,
     private configService: ConfigService,
   ) {}
 
@@ -218,6 +227,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `[DangerZones] created zone "${zone.title}" from earthquake`,
     );
+    void this.notifyUsersInZone(result as unknown as DangerZone);
     return result as unknown as DangerZone;
   }
 
@@ -313,6 +323,7 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       `[DangerZones] created ${centroids.length} zone(s)` +
         ` "${zone.title}" from BMKG alert`,
     );
+    if (firstCreated) void this.notifyUsersInZone(firstCreated);
     return firstCreated;
   }
 
@@ -323,16 +334,15 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     lon: number,
   ): Promise<EarthquakeAlert[]> {
     const cutoff = new Date(Date.now() - 24 * 3_600_000);
-    const tiers: { minMag: number; maxMag: number | null; radiusKm: number }[] =
-      [
-        { minMag: 8.0, maxMag: null, radiusKm: 1000 },
-        { minMag: 7.5, maxMag: 8.0, radiusKm: 800 },
-        { minMag: 7.0, maxMag: 7.5, radiusKm: 600 },
-        { minMag: 6.5, maxMag: 7.0, radiusKm: 400 },
-        { minMag: 6.0, maxMag: 6.5, radiusKm: 300 },
-        { minMag: 5.5, maxMag: 6.0, radiusKm: 200 },
-        { minMag: 5.0, maxMag: 5.5, radiusKm: 150 },
-      ];
+    const tiers = [
+      { minMag: 8.0, maxMag: null as number | null, radiusKm: 1000 },
+      { minMag: 7.5, maxMag: 8.0, radiusKm: 800 },
+      { minMag: 7.0, maxMag: 7.5, radiusKm: 600 },
+      { minMag: 6.5, maxMag: 7.0, radiusKm: 400 },
+      { minMag: 6.0, maxMag: 6.5, radiusKm: 300 },
+      { minMag: 5.5, maxMag: 6.0, radiusKm: 200 },
+      { minMag: 5.0, maxMag: 5.5, radiusKm: 150 },
+    ];
 
     const results: EarthquakeAlert[] = [];
 
@@ -341,7 +351,8 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
         ? { $gte: minMag, $lt: maxMag }
         : { $gte: minMag };
 
-      const tier = await this.earthquakeModel
+      const tier = await this.db
+        .collection('earthquake_alerts')
         .where('magnitude', magFilter)
         .where('fetchedAt', { $gte: cutoff })
         .where('location', {
@@ -358,13 +369,62 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     return results;
   }
 
+  async getBmkgAlertsNear(lat: number, lon: number): Promise<BmkgAlert[]> {
+    const now = new Date().toISOString();
+    const tiers = [
+      { severity: 'Extreme', radiusKm: 50 },
+      { severity: 'Severe', radiusKm: 30 },
+      { severity: 'Moderate', radiusKm: 20 },
+    ];
+
+    interface CentroidDoc {
+      alertId: ObjectId;
+      expires: string;
+    }
+
+    const seen = new Set<string>();
+    const alertIds: ObjectId[] = [];
+
+    for (const { severity, radiusKm } of tiers) {
+      const hits = await this.db
+        .collection('bmkg_polygon_centroids')
+        .where('severity', severity)
+        .where('isDangerous', true)
+        .where('centroid', {
+          $near: {
+            $geometry: { type: 'Point', coordinates: [lon, lat] },
+            $maxDistance: radiusKm * 1000,
+          },
+        })
+        .get();
+
+      for (const c of hits as unknown as CentroidDoc[]) {
+        if (c.expires && c.expires <= now) continue;
+        const idStr = c.alertId.toString();
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          alertIds.push(new ObjectId(idStr));
+        }
+      }
+    }
+
+    if (alertIds.length === 0) return [];
+
+    const alerts = await this.bmkgAlertModel
+      .where('_id', { $in: alertIds })
+      .get();
+    return alerts as unknown as BmkgAlert[];
+  }
+
   async getActiveDangerZones(): Promise<DangerZone[]> {
-    await this.deactivateExpired();
+    const now = new Date().toISOString();
     const results = await this.dangerZoneModel
       .where('isActive', true)
       .orderBy('createdAt', 'desc')
       .get();
-    return results as unknown as DangerZone[];
+    return (results as unknown as DangerZone[]).filter(
+      (z) => !z.activeUntil || z.activeUntil >= now,
+    );
   }
 
   async getDangerZonesNear(
@@ -378,10 +438,38 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
       if (z.activeUntil && z.activeUntil < now) return false;
       const [zLon, zLat] = (z.location as unknown as { coordinates: number[] })
         .coordinates;
-      return (
-        haversineKm(lat, lon, zLat, zLon) <= Math.max(radiusKm, z.radiusKm)
-      );
+      const dist = haversineKm(lat, lon, zLat, zLon);
+      // two circles intersect when distance < sum of both radii
+      return dist <= radiusKm + z.radiusKm;
     });
+  }
+
+  async getDangerZonesForLocations(
+    locations: { latitude: number; longitude: number }[],
+  ): Promise<DangerZone[]> {
+    if (locations.length === 0) return [];
+    const zones = await this.dangerZoneModel.where('isActive', true).get();
+    const now = new Date().toISOString();
+    const seen = new Set<string>();
+    const result: DangerZone[] = [];
+    for (const zone of zones as unknown as DangerZone[]) {
+      if (zone.activeUntil && zone.activeUntil < now) continue;
+      if (!zone.location?.coordinates) continue;
+      const [zLon, zLat] = (
+        zone.location as unknown as { coordinates: number[] }
+      ).coordinates;
+      const id = zone._id.toString();
+      if (seen.has(id)) continue;
+      for (const loc of locations) {
+        const dist = haversineKm(loc.latitude, loc.longitude, zLat, zLon);
+        if (dist <= NEARBY_KM + zone.radiusKm) {
+          seen.add(id);
+          result.push(zone);
+          break;
+        }
+      }
+    }
+    return result;
   }
 
   async triggerAnalysis(): Promise<string> {
@@ -389,7 +477,82 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     return 'Danger zone analysis completed';
   }
 
+  async testPushNotification(pushToken: string): Promise<void> {
+    await this.notificationsService.sendToToken(
+      pushToken,
+      '⚠️ Zona Bahaya Aktif',
+      'Ini adalah test notifikasi zona bahaya dari server.',
+      { screen: 'Home' },
+    );
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  private async notifyUsersInZone(zone: DangerZone): Promise<void> {
+    try {
+      const [zLon, zLat] = (
+        zone.location as unknown as { coordinates: number[] }
+      ).coordinates;
+      this.logger.log(
+        `[Notify] zone "${zone.title}" center=(${zLat},${zLon}) radiusKm=${zone.radiusKm}`,
+      );
+
+      const locations = await this.userLocationModel
+        .where('notifyOnDangerZones', true)
+        .get();
+      this.logger.log(
+        `[Notify] locations with notifyOnDangerZones=true: ${locations.length}`,
+      );
+
+      const affectedUserIds = new Set<string>();
+      for (const loc of locations as unknown as UserLocation[]) {
+        const [lLon, lLat] = (
+          loc.location as unknown as { coordinates: number[] }
+        ).coordinates;
+        const dist = haversineKm(lLat, lLon, zLat, zLon);
+        this.logger.log(
+          `[Notify] location userId=${loc.userId} dist=${dist.toFixed(1)}km vs radiusKm=${zone.radiusKm}`,
+        );
+        if (dist <= zone.radiusKm) {
+          affectedUserIds.add(loc.userId.toString());
+        }
+      }
+      this.logger.log(`[Notify] affected users: ${affectedUserIds.size}`);
+
+      if (affectedUserIds.size === 0) return;
+
+      const tokens: string[] = [];
+      for (const userId of affectedUserIds) {
+        try {
+          const user = await this.userModel.find(userId);
+          const pushTokens = (user as unknown as { pushTokens?: string[] })
+            ?.pushTokens;
+          this.logger.log(
+            `[Notify] user ${userId} pushTokens=${JSON.stringify(pushTokens)}`,
+          );
+          if (pushTokens?.length) tokens.push(...pushTokens);
+        } catch (findErr) {
+          this.logger.warn(`[Notify] find user ${userId} failed: ${findErr}`);
+        }
+      }
+      this.logger.log(`[Notify] total tokens to send: ${tokens.length}`);
+
+      if (tokens.length === 0) return;
+
+      await this.notificationsService.sendToMany(
+        tokens,
+        `⚠️ Zona Bahaya ${zone.level.charAt(0).toUpperCase() + zone.level.slice(1)}`,
+        zone.title,
+        { screen: 'Home', zoneId: zone._id?.toString() },
+      );
+
+      this.logger.log(
+        `[DangerZones] push sent to ${tokens.length} token(s) for zone "${zone.title}"`,
+      );
+    } catch (err) {
+      this.logger.error('[DangerZones] notifyUsersInZone failed', err);
+    }
+  }
 
   private async deactivateExpired(): Promise<void> {
     const now = new Date().toISOString();
@@ -426,15 +589,18 @@ export class DangerZonesService implements OnModuleInit, OnModuleDestroy {
     searchRadiusKm: number,
   ): Promise<EarthquakeAlert[]> {
     const cutoff = new Date(Date.now() - 48 * 3_600_000);
-    const all = await this.earthquakeModel
+    const results = await this.db
+      .collection('earthquake_alerts')
       .where('magnitude', { $gte: 5 })
       .where('fetchedAt', { $gte: cutoff })
+      .where('location', {
+        $near: {
+          $geometry: { type: 'Point', coordinates: [lon, lat] },
+          $maxDistance: searchRadiusKm * 1000,
+        },
+      })
       .get();
-    return (all as unknown as EarthquakeAlert[]).filter((e) => {
-      const [eLon, eLat] = (e.location as unknown as { coordinates: number[] })
-        .coordinates;
-      return haversineKm(lat, lon, eLat, eLon) <= searchRadiusKm;
-    });
+    return results as unknown as EarthquakeAlert[];
   }
 
   private async findNearbyBmkgAlerts(

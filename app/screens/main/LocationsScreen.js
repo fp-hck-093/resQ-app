@@ -5,6 +5,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -21,6 +22,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 const GET_LOCATIONS = gql`
   query GetMyLocations {
     getMyLocations {
@@ -31,6 +34,7 @@ const GET_LOCATIONS = gql`
       province
       country
       notificationRadius
+      notifyOnDangerZones
       location {
         type
         coordinates
@@ -56,6 +60,15 @@ const DELETE_LOCATION = gql`
   }
 `;
 
+const UPDATE_LOCATION = gql`
+  mutation UpdateLocation($input: UpdateLocationInput!) {
+    updateLocation(input: $input) {
+      _id
+      notifyOnDangerZones
+    }
+  }
+`;
+
 export default function LocationsScreen() {
   const insets = useSafeAreaInsets();
   const mapSearchRef = useRef(null);
@@ -65,6 +78,9 @@ export default function LocationsScreen() {
   const [showViewMapModal, setShowViewMapModal] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
   const [pinnedLocation, setPinnedLocation] = useState(null);
   const [viewMapLocation, setViewMapLocation] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -98,6 +114,16 @@ export default function LocationsScreen() {
     onCompleted: () => refetch(),
   });
 
+  const [updateLocation] = useMutation(UPDATE_LOCATION, {
+    onCompleted: () => refetch(),
+  });
+
+  const handleToggleDangerZone = (locationId, value) => {
+    updateLocation({
+      variables: { input: { locationId, notifyOnDangerZones: value } },
+    });
+  };
+
   const locations = data?.getMyLocations || [];
 
   const handleDetectLocation = async () => {
@@ -126,6 +152,71 @@ export default function LocationsScreen() {
       console.log("Location error:", e);
     } finally {
       setLocationLoading(false);
+    }
+  };
+
+  const handleSearchChange = async (text) => {
+    setSearchQuery(text);
+    if (text.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": GOOGLE_API_KEY,
+        },
+        body: JSON.stringify({ input: text, includedRegionCodes: ["id"], languageCode: "id" }),
+      });
+      const data = await res.json();
+      const predictions = (data.suggestions ?? []).map((s) => s.placePrediction).filter(Boolean);
+      setSuggestions(predictions);
+    } catch {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSelectSuggestion = async (item) => {
+    setSuggestions([]);
+    setSearchQuery(item.structuredFormat?.mainText?.text ?? item.text?.text ?? "");
+    setMapLoading(true);
+    try {
+      const detailRes = await fetch(
+        `https://places.googleapis.com/v1/${item.place}`,
+        {
+          headers: {
+            "X-Goog-Api-Key": GOOGLE_API_KEY,
+            "X-Goog-FieldMask": "location",
+          },
+        },
+      );
+      const detailData = await detailRes.json();
+      const loc = detailData.location;
+      if (!loc) return;
+      const latitude = loc.latitude;
+      const longitude = loc.longitude;
+      setPinnedLocation({ latitude, longitude });
+      mapSearchRef.current?.animateToRegion(
+        { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        800,
+      );
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (geocode.length > 0) {
+        const g = geocode[0];
+        setForm({
+          ...form,
+          address: `${g.street || ""} ${g.district || ""}`.trim(),
+          city: g.city || g.subregion || "",
+          province: g.region || "",
+          country: g.country || "Indonesia",
+        });
+      }
+    } catch (e) {
+      console.log("Place detail error:", e);
+    } finally {
+      setMapLoading(false);
     }
   };
 
@@ -202,6 +293,8 @@ export default function LocationsScreen() {
   const closeAddModal = () => {
     setShowAddModal(false);
     setPinnedLocation(null);
+    setSearchQuery("");
+    setSuggestions([]);
     setForm({
       address: "",
       city: "",
@@ -272,6 +365,7 @@ export default function LocationsScreen() {
                 <View key={loc._id} style={s.card}>
                   {/* Card Top */}
                   <View style={s.cardTop}>
+
                     <View
                       style={[
                         s.cardDot,
@@ -332,6 +426,32 @@ export default function LocationsScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
+                  </View>
+
+                  {/* Card Bottom — danger zone toggle */}
+                  <View style={s.cardBottom}>
+                    <Ionicons
+                      name="shield-outline"
+                      size={13}
+                      color={loc.notifyOnDangerZones ? "#3b5fca" : "#94a3b8"}
+                    />
+                    <Text
+                      style={[
+                        s.cardToggleLabel,
+                        loc.notifyOnDangerZones && s.cardToggleLabelActive,
+                      ]}
+                    >
+                      Tampil di peta zona bahaya
+                    </Text>
+                    <Switch
+                      value={loc.notifyOnDangerZones ?? true}
+                      onValueChange={(val) =>
+                        handleToggleDangerZone(loc._id, val)
+                      }
+                      trackColor={{ false: "#e2e8f0", true: "#bfdbfe" }}
+                      thumbColor={loc.notifyOnDangerZones ? "#3b5fca" : "#cbd5e1"}
+                      ios_backgroundColor="#e2e8f0"
+                    />
                   </View>
                 </View>
               );
@@ -523,10 +643,40 @@ export default function LocationsScreen() {
             <View style={{ width: 36 }} />
           </LinearGradient>
 
-          <View style={s.mapHint}>
-            <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
-            <Text style={s.mapHintText}>Tap di peta untuk memilih lokasi</Text>
+          <View style={s.mapSearch}>
+            <Ionicons name="search-outline" size={15} color="#94a3b8" />
+            <TextInput
+              style={s.mapSearchInput}
+              placeholder="Cari alamat atau tempat..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              returnKeyType="search"
+            />
+            {searchLoading && <ActivityIndicator size="small" color="#3b5fca" />}
           </View>
+
+          {suggestions.length > 0 ? (
+            <View style={s.suggestionBox}>
+              {suggestions.map((item, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.suggestionItem, i < suggestions.length - 1 && s.suggestionDivider]}
+                  onPress={() => handleSelectSuggestion(item)}
+                >
+                  <Ionicons name="location-outline" size={14} color="#3b5fca" />
+                  <Text style={s.suggestionText} numberOfLines={2}>
+                    {item.text?.text}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={s.mapHint}>
+              <Ionicons name="hand-left-outline" size={13} color="#3b5fca" />
+              <Text style={s.mapHintText}>Tap di peta atau cari lokasi di atas</Text>
+            </View>
+          )}
 
           <MapView
             ref={mapSearchRef}
@@ -793,6 +943,24 @@ const s = StyleSheet.create({
   },
   confirmDeleteText: { fontSize: 11, fontWeight: "700", color: "#ef4444" },
 
+  cardBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+  },
+  cardToggleLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#94a3b8",
+  },
+  cardToggleLabelActive: {
+    color: "#3b5fca",
+  },
   cardActions: {
     flexDirection: "row",
     alignItems: "center",

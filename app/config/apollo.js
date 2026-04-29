@@ -21,7 +21,22 @@ const authLink = setContext(async (_, { headers }) => {
 
 const client = new ApolloClient({
   link: authLink.concat(httpLink),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          getActiveBmkgAlerts: { merge: false },
+          getActiveDangerZones: { merge: false },
+          getDangerZonesNear: { merge: false },
+          getDangerZonesForLocations: { merge: false },
+          getWeatherLogs: { merge: false },
+          getMyLocations: { merge: false },
+          getRequests: { merge: false },
+          getEarthquakeAlerts: { merge: false },
+        },
+      },
+    },
+  }),
 });
 
 export default client;

@@ -293,21 +293,24 @@ export class RequestsService {
     const order = (sortOrder ?? 'desc') as 'asc' | 'desc';
     const hasLocation = latitude !== undefined && longitude !== undefined;
 
-    // Build DB query with only exact-match filters (Mongoloquent-safe)
-    let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
-    if (category) baseQuery = baseQuery.where('category', category);
-    if (status) baseQuery = baseQuery.where('status', status);
-
-    let all = (await baseQuery.get()) as unknown as Request[];
-
-    // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
-    if (search) {
-      const term = search.toLowerCase();
-      all = all.filter((r) => r.userName?.toLowerCase().includes(term));
-    }
-
-    // Apply location filter in JS
     if (hasLocation) {
+      let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
+      if (category) baseQuery = baseQuery.where('category', category);
+      if (status) {
+        baseQuery = baseQuery.where('status', status);
+      } else {
+        baseQuery = baseQuery.whereIn('status', ['pending', 'in_progress']);
+      }
+
+      let all = (await baseQuery.get()) as unknown as Request[];
+
+      // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
+      if (search) {
+        const term = search.toLowerCase();
+        all = all.filter((r) => r.userName?.toLowerCase().includes(term));
+      }
+
+      // Apply location filter in JS
       all = all.filter((r) => {
         const coords = r.location?.coordinates as unknown as
           | number[]
@@ -319,9 +322,38 @@ export class RequestsService {
           NEARBY_REQUESTS_RADIUS_KM
         );
       });
+
+      return all;
     }
 
-    return this.attachVolunteers(all);
+    const hasFilters = !!(search || category || status);
+
+    if (!hasFilters) {
+      const results = await this.requestModel
+        .whereIn('status', ['pending', 'in_progress'])
+        .orderBy(sortBy ?? 'createdAt', order)
+        .get();
+      return results as unknown as Request[];
+    }
+
+    // Build DB query with exact-match filters only ($regex breaks in Mongoloquent)
+    let query = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
+    if (category) query = query.where('category', category);
+    if (status) {
+      query = query.where('status', status);
+    } else {
+      query = query.whereIn('status', ['pending', 'in_progress']);
+    }
+
+    let results = (await query.get()) as unknown as Request[];
+
+    // Apply search in JS — same reason as the location path above
+    if (search) {
+      const term = search.toLowerCase();
+      results = results.filter((r) => r.userName?.toLowerCase().includes(term));
+    }
+
+    return this.attachVolunteers(results);
   }
 
   async getRequestsForMap(
@@ -337,7 +369,11 @@ export class RequestsService {
       },
     });
 
-    if (status) query = query.where('status', status);
+    if (status) {
+      query = query.where('status', status);
+    } else {
+      query = query.where('status', { $ne: 'completed' });
+    }
     if (category) query = query.where('category', category);
 
     const results = await query.get();
