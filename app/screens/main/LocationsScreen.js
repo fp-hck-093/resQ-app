@@ -366,22 +366,11 @@ export default function LocationsScreen() {
                   {/* Card Top */}
                   <View style={s.cardTop}>
 
-                    <View
-                      style={[
-                        s.cardDot,
-                        index === 0 && { backgroundColor: "#3b5fca" },
-                      ]}
-                    />
                     <View style={{ flex: 1 }}>
                       <View style={s.cardTitleRow}>
                         <Text style={s.cardTitle} numberOfLines={1}>
                           {title}
                         </Text>
-                        {index === 0 && (
-                          <View style={s.primaryBadge}>
-                            <Text style={s.primaryBadgeText}>Primary</Text>
-                          </View>
-                        )}
                       </View>
                       <View style={s.cardAddrRow}>
                         <Ionicons
@@ -603,19 +592,7 @@ export default function LocationsScreen() {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>
-                    <View style={s.submitIconBox}>
-                      <Ionicons
-                        name="location"
-                        size={18}
-                        color={isFormValid ? "#3b5fca" : "#94a3b8"}
-                      />
-                    </View>
                     <Text style={s.submitText}>Simpan Lokasi</Text>
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color="rgba(255,255,255,0.7)"
-                    />
                   </>
                 )}
               </LinearGradient>

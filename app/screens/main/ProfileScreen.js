@@ -517,22 +517,6 @@ export default function ProfileScreen({ navigation }) {
               </View>
               <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuItem}>
-              <View style={styles.menuItemLeft}>
-                <View
-                  style={[styles.menuIconWrap, { backgroundColor: "#fff7ed" }]}
-                >
-                  <Ionicons
-                    name="notifications-outline"
-                    size={18}
-                    color="#f97316"
-                  />
-                </View>
-                <Text style={styles.menuItemLabel}>Notifications</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-            </TouchableOpacity>
           </View>
         </View>
 
