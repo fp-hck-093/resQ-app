@@ -5,6 +5,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -33,6 +34,7 @@ const GET_LOCATIONS = gql`
       province
       country
       notificationRadius
+      notifyOnDangerZones
       location {
         type
         coordinates
@@ -55,6 +57,15 @@ const ADD_LOCATION = gql`
 const DELETE_LOCATION = gql`
   mutation DeleteLocation($locationId: String!) {
     deleteLocation(locationId: $locationId)
+  }
+`;
+
+const UPDATE_LOCATION = gql`
+  mutation UpdateLocation($input: UpdateLocationInput!) {
+    updateLocation(input: $input) {
+      _id
+      notifyOnDangerZones
+    }
   }
 `;
 
@@ -102,6 +113,16 @@ export default function LocationsScreen() {
   const [deleteLocation] = useMutation(DELETE_LOCATION, {
     onCompleted: () => refetch(),
   });
+
+  const [updateLocation] = useMutation(UPDATE_LOCATION, {
+    onCompleted: () => refetch(),
+  });
+
+  const handleToggleDangerZone = (locationId, value) => {
+    updateLocation({
+      variables: { input: { locationId, notifyOnDangerZones: value } },
+    });
+  };
 
   const locations = data?.getMyLocations || [];
 
@@ -344,6 +365,7 @@ export default function LocationsScreen() {
                 <View key={loc._id} style={s.card}>
                   {/* Card Top */}
                   <View style={s.cardTop}>
+
                     <View
                       style={[
                         s.cardDot,
@@ -404,6 +426,32 @@ export default function LocationsScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
+                  </View>
+
+                  {/* Card Bottom — danger zone toggle */}
+                  <View style={s.cardBottom}>
+                    <Ionicons
+                      name="shield-outline"
+                      size={13}
+                      color={loc.notifyOnDangerZones ? "#3b5fca" : "#94a3b8"}
+                    />
+                    <Text
+                      style={[
+                        s.cardToggleLabel,
+                        loc.notifyOnDangerZones && s.cardToggleLabelActive,
+                      ]}
+                    >
+                      Tampil di peta zona bahaya
+                    </Text>
+                    <Switch
+                      value={loc.notifyOnDangerZones ?? true}
+                      onValueChange={(val) =>
+                        handleToggleDangerZone(loc._id, val)
+                      }
+                      trackColor={{ false: "#e2e8f0", true: "#bfdbfe" }}
+                      thumbColor={loc.notifyOnDangerZones ? "#3b5fca" : "#cbd5e1"}
+                      ios_backgroundColor="#e2e8f0"
+                    />
                   </View>
                 </View>
               );
@@ -895,6 +943,24 @@ const s = StyleSheet.create({
   },
   confirmDeleteText: { fontSize: 11, fontWeight: "700", color: "#ef4444" },
 
+  cardBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+  },
+  cardToggleLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#94a3b8",
+  },
+  cardToggleLabelActive: {
+    color: "#3b5fca",
+  },
   cardActions: {
     flexDirection: "row",
     alignItems: "center",

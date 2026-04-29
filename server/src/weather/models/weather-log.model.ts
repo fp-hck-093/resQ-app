@@ -4,6 +4,7 @@ import { GeoPoint } from '../../common/types/geo-point.type';
 
 export interface IWeatherLog {
   _id?: string;
+  province?: string;
   city: string;
   location: { type: string; coordinates: number[] };
   condition: string;
@@ -25,6 +26,9 @@ export class WeatherLog extends Model<IWeatherLog> {
 
   @Field(() => ID)
   _id: string;
+
+  @Field(() => String, { nullable: true })
+  province: string;
 
   @Field(() => String)
   city: string;

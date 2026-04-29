@@ -299,7 +299,7 @@ export class RequestsService {
       if (status) {
         baseQuery = baseQuery.where('status', status);
       } else {
-        baseQuery = baseQuery.where('status', { $ne: 'completed' });
+        baseQuery = baseQuery.whereIn('status', ['pending', 'in_progress']);
       }
 
       let all = (await baseQuery.get()) as unknown as Request[];
@@ -330,26 +330,30 @@ export class RequestsService {
 
     if (!hasFilters) {
       const results = await this.requestModel
-        .where('status', { $ne: 'completed' })
+        .whereIn('status', ['pending', 'in_progress'])
         .orderBy(sortBy ?? 'createdAt', order)
         .get();
       return results as unknown as Request[];
     }
 
-    const firstFilter = search
-      ? this.requestModel.where('userName', { $regex: search, $options: 'i' })
-      : category
-        ? this.requestModel.where('category', category)
-        : this.requestModel.where('status', status!);
+    // Build DB query with exact-match filters only ($regex breaks in Mongoloquent)
+    let query = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
+    if (category) query = query.where('category', category);
+    if (status) {
+      query = query.where('status', status);
+    } else {
+      query = query.whereIn('status', ['pending', 'in_progress']);
+    }
 
-    let query = firstFilter;
-    if (search && category) query = query.where('category', category);
-    if (search && status) query = query.where('status', status);
-    if (!search && category && status) query = query.where('status', status);
-    if (!status) query = query.where('status', { $ne: 'completed' });
+    let results = (await query.get()) as unknown as Request[];
 
-    const results = await query.orderBy(sortBy ?? 'createdAt', order).get();
-    return this.attachVolunteers(results as unknown as Request[]);
+    // Apply search in JS — same reason as the location path above
+    if (search) {
+      const term = search.toLowerCase();
+      results = results.filter((r) => r.userName?.toLowerCase().includes(term));
+    }
+
+    return this.attachVolunteers(results);
   }
 
   async getRequestsForMap(
