@@ -17,7 +17,6 @@ import { UserLocation } from '../locations/models/locations.model';
 import { User } from '../users/models/user.model';
 import { NotificationsService } from '../notifications/notifications.service';
 
-// eslint-disable-next-line max-len
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
