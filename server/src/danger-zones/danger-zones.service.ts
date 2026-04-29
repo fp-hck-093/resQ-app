@@ -20,7 +20,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
-const NEARBY_KM = 500;
+const NEARBY_KM = 100;
 const REQUEST_DENSITY_RADIUS_KM = 20;
 
 interface GeminiResult {

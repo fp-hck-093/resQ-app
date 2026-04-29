@@ -9,9 +9,8 @@ export class AuthController {
     @Query('id') id: string,
     @Res() res: Response,
   ) {
-    const appUrl = process.env.FRONTEND_URL ?? 'exp://localhost:8081/--';
     return res.redirect(
-      `${appUrl}/reset-password?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`,
+      `resq://reset-password?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`,
     );
   }
 }

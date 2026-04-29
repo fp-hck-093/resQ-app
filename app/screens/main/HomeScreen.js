@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -206,6 +206,30 @@ const CATEGORY_CONFIG = {
   "Money/Item": { color: "#22c55e", icon: "cash", bg: "#f0fdf4" },
 };
 
+function RequestMarker({ request, onPress }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+  const catConfig = CATEGORY_CONFIG[request.category] || {
+    color: "#6b7280",
+    icon: "help-circle",
+  };
+  const [longitude, latitude] = request.location.coordinates;
+  return (
+    <Marker
+      coordinate={{ latitude, longitude }}
+      onPress={onPress}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <View style={[styles.marker, { backgroundColor: catConfig.color }]}>
+        <Ionicons name={catConfig.icon} size={13} color="#fff" />
+      </View>
+    </Marker>
+  );
+}
+
 function getWeatherEmoji(condition) {
   const c = (condition || "").toLowerCase();
   if (c.includes("thunder") || c.includes("storm")) return "⛈️";
@@ -274,11 +298,11 @@ export default function HomeScreen({ navigation }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAllZones, setShowAllZones] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
-  const [confirmModal, setConfirmModal] = useState({
-    visible: false,
-    title: "",
-    message: "",
-    onConfirm: null,
+  const [mapRegion, setMapRegion] = useState({
+    latitude: -6.2088,
+    longitude: 106.8456,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
   });
   const [weatherIndex, setWeatherIndex] = useState(0);
   const weatherFadeAnim = useRef(new Animated.Value(1)).current;
@@ -623,10 +647,28 @@ export default function HomeScreen({ navigation }) {
       : []),
   ];
 
-  const savedZoneIds = new Set(dangerZonesSaved.map((z) => z._id));
+  const savedZoneIds = useMemo(
+    () => new Set(dangerZonesSaved.map((z) => z._id)),
+    [dangerZonesSaved],
+  );
+
+  // Only render zones whose center falls within the visible map region (+ 20% buffer)
+  const visibleDangerZones = useMemo(() => {
+    const latBuffer = mapRegion.latitudeDelta * 0.2;
+    const lonBuffer = mapRegion.longitudeDelta * 0.2;
+    const minLat = mapRegion.latitude - mapRegion.latitudeDelta / 2 - latBuffer;
+    const maxLat = mapRegion.latitude + mapRegion.latitudeDelta / 2 + latBuffer;
+    const minLon = mapRegion.longitude - mapRegion.longitudeDelta / 2 - lonBuffer;
+    const maxLon = mapRegion.longitude + mapRegion.longitudeDelta / 2 + lonBuffer;
+    return dangerZones.filter((z) => {
+      if (!z.location?.coordinates) return false;
+      const [zLon, zLat] = z.location.coordinates;
+      return zLat >= minLat && zLat <= maxLat && zLon >= minLon && zLon <= maxLon;
+    });
+  }, [dangerZones, mapRegion]);
 
   const renderDangerZones = () =>
-    dangerZones.map((zone) => {
+    visibleDangerZones.map((zone) => {
       if (!zone.location?.coordinates) return null;
       const [longitude, latitude] = zone.location.coordinates;
       const cfg = DANGER_LEVEL_CONFIG[zone.level] || DANGER_LEVEL_CONFIG.moderate;
@@ -664,21 +706,12 @@ export default function HomeScreen({ navigation }) {
   const renderMarkers = () =>
     requests.map((request) => {
       if (!request.location?.coordinates) return null;
-      const [longitude, latitude] = request.location.coordinates;
-      const catConfig = CATEGORY_CONFIG[request.category] || {
-        color: "#6b7280",
-        icon: "help-circle",
-      };
       return (
-        <Marker
+        <RequestMarker
           key={request._id}
-          coordinate={{ latitude, longitude }}
+          request={request}
           onPress={() => setSelectedRequest(request)}
-        >
-          <View style={[styles.marker, { backgroundColor: catConfig.color }]}>
-            <Ionicons name={catConfig.icon} size={13} color="#fff" />
-          </View>
-        </Marker>
+        />
       );
     });
 
@@ -700,6 +733,7 @@ export default function HomeScreen({ navigation }) {
         zoomEnabled
         scrollEnabled
         zoomControlEnabled
+        onRegionChangeComplete={setMapRegion}
       >
         {renderDangerZones()}
         {renderMarkers()}
@@ -1122,22 +1156,12 @@ export default function HomeScreen({ navigation }) {
             {renderDangerZones()}
             {requests.map((request) => {
               if (!request.location?.coordinates) return null;
-              const [longitude, latitude] = request.location.coordinates;
-              const catConfig = CATEGORY_CONFIG[request.category] || {
-                color: "#6b7280",
-                icon: "help-circle",
-              };
               return (
-                <Marker key={request._id} coordinate={{ latitude, longitude }}>
-                  <View
-                    style={[
-                      styles.marker,
-                      { backgroundColor: catConfig.color },
-                    ]}
-                  >
-                    <Ionicons name={catConfig.icon} size={13} color="#fff" />
-                  </View>
-                </Marker>
+                <RequestMarker
+                  key={request._id}
+                  request={request}
+                  onPress={() => setSelectedRequest(request)}
+                />
               );
             })}
           </MapView>
