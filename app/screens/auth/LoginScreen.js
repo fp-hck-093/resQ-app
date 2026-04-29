@@ -299,14 +299,6 @@ export default function LoginScreen({ navigation }) {
                 <View style={styles.dividerLine} />
               </View>
 
-              <View style={styles.socialRow}>
-                <Pressable style={styles.socialBtn}>
-                  <Text style={styles.socialBtnText}>G Google</Text>
-                </Pressable>
-                <Pressable style={styles.socialBtn}>
-                  <Text style={styles.socialBtnText}>f Facebook</Text>
-                </Pressable>
-              </View>
             </View>
 
             <View style={styles.footer}>
@@ -336,6 +328,15 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.featureLabel}>Community</Text>
               </View>
             </View>
+
+            <Text style={styles.legalText}>
+              By signing in, you agree to our{" "}
+              <Text style={styles.legalLink}>Terms of Service</Text>
+              {" "}and{" "}
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </Text>
+
+            <Text style={styles.versionText}>v1.0.0 · ResQ</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -515,6 +516,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#475569",
+  },
+
+  legalText: {
+    textAlign: "center",
+    fontSize: 11,
+    color: "#94a3b8",
+    marginTop: 16,
+    lineHeight: 17,
+  },
+  legalLink: {
+    color: "#3b5fca",
+    fontWeight: "600",
+  },
+  versionText: {
+    textAlign: "center",
+    fontSize: 11,
+    color: "#cbd5e1",
+    marginTop: 8,
+    marginBottom: 4,
   },
 
   errorBanner: {
