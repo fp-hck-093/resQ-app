@@ -214,6 +214,7 @@ input CreateRequestInput {
   userName, userPhone, category, description,
   numberOfPeople, location, address, photos?
   # urgencyScore is server-calculated — do not send
+  # location is required — no coordinate fallback exists
 }
 ```
 
@@ -353,6 +354,8 @@ Polled every **15 minutes** from the BMKG nowcast RSS feed. Each item's CAP XML 
 
 Deduplication: skips if `identifier` already exists.
 
+**Expiry:** before each 15-minute sync, `purgeExpiredAlerts()` deletes all `bmkg_alerts` and their associated `bmkg_polygon_centroids` where `expires < now`. Alerts are removed on the next poll cycle after they expire.
+
 | Field | Type | Notes |
 |---|---|---|
 | `identifier` | String | CAP identifier |
@@ -434,7 +437,7 @@ Auto-generated zones derived from earthquake alerts, BMKG nowcast alerts, and we
 | `radiusKm` | Float | affected radius for map rendering |
 | `activeFrom` | String | ISO datetime |
 | `activeUntil` | String | ISO datetime |
-| `isActive` | Boolean | set to `false` when expired |
+| `isActive` | Boolean | always `true` while stored — expired zones are deleted immediately |
 | `requestCount` | Int | active requests within 20 km at creation time |
 
 #### Zone generation logic
@@ -465,7 +468,7 @@ If BMKG alerts or dangerous weather exist within 100 km, Gemini is called with a
 
 **Deduplication:** if any active zone already references a source document's ID in `sourceIds`, that source is skipped for the current poll cycle.
 
-**Expiry:** `deactivateExpired()` runs before every poll and sets `isActive = false` on zones whose `activeUntil` has passed.
+**Expiry:** `deactivateExpired()` runs before every poll and **immediately deletes** zones whose `activeUntil` has passed. Any lingering `isActive: false` documents (e.g. from a previous server version) are also deleted in the same pass. There is no soft-delete buffer.
 
 #### Operations
 
@@ -473,7 +476,7 @@ If BMKG alerts or dangerous weather exist within 100 km, Gemini is called with a
 |---|---|---|
 | Query | `getActiveDangerZones` | All active non-expired zones |
 | Query | `getDangerZonesNear(latitude, longitude, radiusKm?)` | Zones visible to the user. A zone is included if the distance from the user to the zone centroid is within **either** the user's `radiusKm` (map viewport, defaults to 100 km) **or** the zone's own `radiusKm` — whichever is larger. This ensures large-scale events (e.g. M8+ at 1000 km) are always shown to users inside the affected area regardless of their personal notification radius. |
-| Mutation | `triggerDangerZoneAnalysis` | Manually trigger a full analysis cycle |
+| Mutation | `triggerDangerZoneAnalysis` | Kick off a full analysis cycle in the background — returns immediately with `"Danger zone analysis started"` |
 
 ---
 
@@ -559,7 +562,7 @@ Nearby compound signals within 100 km?
         ↓
 Create DangerZone document(s)
         ↓
-Poll cycle: deactivateExpired() marks stale zones isActive = false
+Poll cycle: deactivateExpired() deletes zones whose activeUntil has passed
 ```
 
 ### Password reset flow
