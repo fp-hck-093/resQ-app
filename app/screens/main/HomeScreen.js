@@ -684,7 +684,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* ── LEGEND TOGGLE (kiri bawah) ── */}
-      <View style={[styles.legendControls, { bottom: 90 + insets.bottom }]}>
+      <View style={[styles.legendControls, { bottom: 0 + insets.bottom }]}>
         <TouchableOpacity
           style={[
             styles.mapControlBtn,
@@ -702,12 +702,12 @@ export default function HomeScreen({ navigation }) {
 
       {/* ── LEGEND PANEL ── */}
       {showLegend && (
-        <View style={[styles.legendPanel, { bottom: 142 + insets.bottom }]}>
-          <Text style={styles.legendPanelTitle}>Zona Bahaya</Text>
+        <View style={[styles.legendPanel, { bottom: 52 + insets.bottom }]}>
+          <Text style={styles.legendPanelTitle}>Danger Zone</Text>
           {[
-            { level: "extreme", label: "Ekstrem" },
-            { level: "severe", label: "Parah" },
-            { level: "moderate", label: "Sedang" },
+            { level: "extreme", label: "Ekstreme" },
+            { level: "severe", label: "Severe" },
+            { level: "moderate", label: "Moderate" },
           ].map(({ level, label }) => (
             <View key={level} style={styles.legendRow}>
               <View
@@ -721,7 +721,7 @@ export default function HomeScreen({ navigation }) {
           ))}
           <View style={styles.legendDivider} />
           <Text style={styles.legendPanelSubTitle}>
-            {showAllZones ? "Semua zona aktif" : "Zona di sekitar kamu"}
+            {showAllZones ? "All active zones" : "Zones near you"}
           </Text>
         </View>
       )}
