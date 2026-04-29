@@ -123,7 +123,7 @@ export class BmkgLogsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async purgeExpiredAlerts(): Promise<void> {
-    const cutoff = new Date(Date.now() - 86_400_000).toISOString();
+    const cutoff = new Date().toISOString();
     const stale = await this.bmkgAlertModel
       .where('expires', { $lt: cutoff })
       .get();
