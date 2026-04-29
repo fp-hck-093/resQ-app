@@ -307,6 +307,12 @@ export default function HomeScreen({ navigation }) {
   const [weatherIndex, setWeatherIndex] = useState(0);
   const weatherFadeAnim = useRef(new Animated.Value(1)).current;
   const weatherProgressAnim = useRef(new Animated.Value(0)).current;
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
 
   const { data: requestsData, refetch } = useQuery(GET_NEARBY_REQUESTS, {
     variables: userLocation
