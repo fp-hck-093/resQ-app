@@ -25,6 +25,7 @@ import ForgotPasswordScreen from "./screens/auth/ForgotPasswordScreen";
 import LoginScreen from "./screens/auth/LoginScreen";
 import RegisterScreen from "./screens/auth/RegisterScreen";
 import ResetPasswordScreen from "./screens/auth/ResetPasswordScreen";
+import SplashScreen from "./screens/auth/SplashScreen";
 
 // Main Screens
 import HomeScreen from "./screens/main/HomeScreen";
@@ -56,7 +57,6 @@ const linking = {
   },
 };
 
-// Custom Create Button
 function CustomCreateButton({ onPress }) {
   return (
     <TouchableOpacity style={styles.createBtn} onPress={onPress}>
@@ -140,9 +140,7 @@ function MainTabs() {
           tabBarButton: (props) => (
             <CustomCreateButton onPress={props.onPress} />
           ),
-          tabBarItemStyle: {
-            height: 78,
-          },
+          tabBarItemStyle: { height: 78 },
         }}
       />
       <Tab.Screen
@@ -188,14 +186,7 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#3b5fca",
-        }}
-      >
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#3b5fca" }}>
         <ActivityIndicator size="large" color="#ffffff" />
       </View>
     );
@@ -206,24 +197,56 @@ export default function App() {
       <ApolloProvider client={client}>
         <NavigationContainer linking={linking}>
           <Stack.Navigator
-            initialRouteName={isLoggedIn ? "Home" : "Login"}
-            screenOptions={{ headerShown: false }}
+            initialRouteName={isLoggedIn ? "Home" : "Splash"}
+            screenOptions={{
+              headerShown: false,
+              animation: "fade",
+            }}
           >
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
+            {/* Splash */}
+            <Stack.Screen
+              name="Splash"
+              component={SplashScreen}
+              options={{ animation: "none" }}
+            />
+
+            {/* Auth */}
+            <Stack.Screen
+              name="Register"
+              component={RegisterScreen}
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{ animation: "fade" }}
+            />
             <Stack.Screen
               name="ForgotPassword"
               component={ForgotPasswordScreen}
+              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="ResetPassword"
               component={ResetPasswordScreen}
+              options={{ animation: "slide_from_right" }}
             />
-            <Stack.Screen name="Home" component={MainTabs} />
-            <Stack.Screen name="MyRequests" component={MyRequestsScreen} />
+
+            {/* Main */}
+            <Stack.Screen
+              name="Home"
+              component={MainTabs}
+              options={{ animation: "fade" }}
+            />
+            <Stack.Screen
+              name="MyRequests"
+              component={MyRequestsScreen}
+              options={{ animation: "slide_from_right" }}
+            />
             <Stack.Screen
               name="VolunteerHistory"
               component={VolunteerHistoryScreen}
+              options={{ animation: "slide_from_right" }}
             />
           </Stack.Navigator>
         </NavigationContainer>
