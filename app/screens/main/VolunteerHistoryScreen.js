@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -35,6 +36,7 @@ const GET_VOLUNTEER_HISTORY = gql`
           description
           address
           numberOfPeople
+          photos
           status
           userName
         }
@@ -301,28 +303,35 @@ export default function VolunteerHistoryScreen({ navigation }) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View
-                style={[
-                  styles.modalCategoryBadge,
-                  {
-                    backgroundColor:
-                      (CATEGORY_CONFIG[selectedActivity?.request?.category]?.color || "#3b5fca") +
-                      "20",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={
-                    CATEGORY_CONFIG[selectedActivity?.request?.category]?.icon ||
-                    "help-circle-outline"
-                  }
-                  size={32}
-                  color={
-                    CATEGORY_CONFIG[selectedActivity?.request?.category]?.color ||
-                    "#3b5fca"
-                  }
+              {selectedActivity?.request?.photos?.[0] ? (
+                <Image
+                  source={{ uri: selectedActivity.request.photos[0] }}
+                  style={styles.modalRequestPhoto}
                 />
-              </View>
+              ) : (
+                <View
+                  style={[
+                    styles.modalCategoryBadge,
+                    {
+                      backgroundColor:
+                        (CATEGORY_CONFIG[selectedActivity?.request?.category]?.color || "#3b5fca") +
+                        "20",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      CATEGORY_CONFIG[selectedActivity?.request?.category]?.icon ||
+                      "help-circle-outline"
+                    }
+                    size={32}
+                    color={
+                      CATEGORY_CONFIG[selectedActivity?.request?.category]?.color ||
+                      "#3b5fca"
+                    }
+                  />
+                </View>
+              )}
               <Text style={styles.modalDesc}>
                 {selectedActivity?.request?.description || "Detail request tidak tersedia"}
               </Text>
@@ -642,6 +651,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
     marginBottom: 16,
+  },
+  modalRequestPhoto: {
+    width: "100%",
+    height: 180,
+    borderRadius: 16,
+    marginBottom: 16,
+    backgroundColor: "#f1f5f9",
   },
   modalDesc: {
     fontSize: 15,

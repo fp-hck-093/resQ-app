@@ -6,6 +6,7 @@ import {
   Easing,
   Image,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,7 +18,7 @@ import * as Notifications from "expo-notifications";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { gql } from "@apollo/client";
-import { useQuery } from "@apollo/client/react";
+import { useMutation, useQuery } from "@apollo/client/react";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import {
@@ -39,11 +40,53 @@ const GET_NEARBY_REQUESTS = gql`
       address
       numberOfPeople
       urgencyScore
+      userId
       userName
+      volunteerIds
+      photos
       location {
         type
         coordinates
       }
+    }
+  }
+`;
+
+const GET_ME = gql`
+  query GetMe {
+    me {
+      _id
+      name
+    }
+  }
+`;
+
+const GET_MY_ACTIVITY_LOGS = gql`
+  query GetMyActivityLogs {
+    getMyActivityLogs(page: 1, limit: 100) {
+      data {
+        requestId
+        status
+      }
+    }
+  }
+`;
+
+const VOLUNTEER_FOR_REQUEST = gql`
+  mutation VolunteerForRequest($requestId: String!) {
+    volunteerForRequest(requestId: $requestId) {
+      _id
+      status
+      volunteerIds
+    }
+  }
+`;
+
+const UPDATE_ACTIVITY_STATUS = gql`
+  mutation UpdateActivityStatus($requestId: String!, $status: ActivityLogStatus!) {
+    updateActivityStatus(requestId: $requestId, status: $status) {
+      _id
+      status
     }
   }
 `;
@@ -220,14 +263,23 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const bottomSafe = Math.max(insets.bottom, 36);
   const mapRef = useRef(null);
   const fullMapRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const [userLocation, setUserLocation] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [volunteeredIds, setVolunteeredIds] = useState(new Set());
+  const [completedIds, setCompletedIds] = useState(new Set());
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAllZones, setShowAllZones] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
   const [weatherIndex, setWeatherIndex] = useState(0);
   const weatherFadeAnim = useRef(new Animated.Value(1)).current;
   const weatherProgressAnim = useRef(new Animated.Value(0)).current;
@@ -245,6 +297,39 @@ export default function HomeScreen({ navigation }) {
     fetchPolicy: "network-only",
     pollInterval: 30000,
   });
+  const { data: meData } = useQuery(GET_ME);
+  const currentUser = meData?.me;
+  const { data: activityData, refetch: refetchActivities } = useQuery(
+    GET_MY_ACTIVITY_LOGS,
+    { fetchPolicy: "network-only" },
+  );
+  const [volunteerForRequest, { loading: volunteerLoading }] = useMutation(
+    VOLUNTEER_FOR_REQUEST,
+    {
+      onCompleted: (result) => {
+        const updated = result?.volunteerForRequest;
+        if (!updated) return;
+        refetch();
+        refetchActivities();
+        setVolunteeredIds((prev) => new Set([...prev, updated._id]));
+        setSelectedRequest((prev) =>
+          prev?._id === updated._id
+            ? {
+                ...prev,
+                status: updated.status,
+                volunteerIds: updated.volunteerIds,
+              }
+            : prev,
+        );
+      },
+    },
+  );
+  const [updateActivityStatus, { loading: activityLoading }] = useMutation(
+    UPDATE_ACTIVITY_STATUS,
+  );
+
+  const confirm = (title, message, onConfirm) =>
+    setConfirmModal({ visible: true, title, message, onConfirm });
   const { data: bmkgData } = useQuery(GET_BMKG_ALERTS, {
     pollInterval: 300000,
   });
@@ -413,6 +498,65 @@ export default function HomeScreen({ navigation }) {
   }, [weatherLogs.length]);
 
   const requests = requestsData?.getRequests || [];
+  const completedActivityIds = new Set([
+    ...completedIds,
+    ...((activityData?.getMyActivityLogs?.data || [])
+      .filter((activity) => activity.status?.toLowerCase() === "completed")
+      .map((activity) => activity.requestId)),
+  ]);
+
+  const handleCompleteVolunteer = () => {
+    const rid = selectedRequest?._id;
+    if (!rid) return;
+    setCompletedIds((prev) => new Set([...prev, rid]));
+    updateActivityStatus({
+      variables: { requestId: rid, status: "COMPLETED" },
+      onCompleted: () => {
+        refetchActivities();
+      },
+      onError: (error) => {
+        if (error.message?.includes("completed activity")) return;
+        setCompletedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+      },
+    });
+  };
+
+  const handleCancelVolunteer = () => {
+    const rid = selectedRequest?._id;
+    if (!rid) return;
+    updateActivityStatus({
+      variables: { requestId: rid, status: "CANCELLED" },
+      onCompleted: () => {
+        refetch();
+        refetchActivities();
+        setVolunteeredIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        setCompletedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rid);
+          return next;
+        });
+        setSelectedRequest((prev) => {
+          if (!prev) return prev;
+          const volunteerIds = (prev.volunteerIds || []).filter(
+            (id) => id !== currentUser?._id,
+          );
+          return {
+            ...prev,
+            volunteerIds,
+            status: volunteerIds.length > 0 ? "in_progress" : "pending",
+          };
+        });
+      },
+    });
+  };
   const bmkgAlerts = bmkgData?.getActiveBmkgAlerts || [];
   const earthquakes = earthquakeData?.getEarthquakeAlerts || [];
   const dangerZonesRaw = showAllZones
@@ -658,7 +802,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* ── MAP CONTROLS (kanan bawah) ── */}
-      <View style={[styles.mapControls, { bottom: 90 + insets.bottom }]}>
+      <View style={[styles.mapControls, { bottom: 90 + bottomSafe }]}>
         <TouchableOpacity style={styles.mapControlBtn} onPress={handleLocate}>
           <Ionicons name="locate" size={18} color="#3b5fca" />
         </TouchableOpacity>
@@ -684,7 +828,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* ── LEGEND TOGGLE (kiri bawah) ── */}
-      <View style={[styles.legendControls, { bottom: 0 + insets.bottom }]}>
+      <View style={[styles.legendControls, { bottom: bottomSafe }]}>
         <TouchableOpacity
           style={[
             styles.mapControlBtn,
@@ -702,7 +846,7 @@ export default function HomeScreen({ navigation }) {
 
       {/* ── LEGEND PANEL ── */}
       {showLegend && (
-        <View style={[styles.legendPanel, { bottom: 52 + insets.bottom }]}>
+        <View style={[styles.legendPanel, { bottom: 52 + bottomSafe }]}>
           <Text style={styles.legendPanelTitle}>Danger Zone</Text>
           {[
             { level: "extreme", label: "Ekstreme" },
@@ -734,7 +878,7 @@ export default function HomeScreen({ navigation }) {
             styles.requestCard,
             {
               transform: [{ translateY: slideAnim }],
-              bottom: 75 + insets.bottom,
+              bottom: 75 + bottomSafe,
             },
           ]}
         >
@@ -811,6 +955,12 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.requestCardDesc} numberOfLines={2}>
             {selectedRequest.description}
           </Text>
+          {selectedRequest.photos?.[0] && (
+            <Image
+              source={{ uri: selectedRequest.photos[0] }}
+              style={styles.requestCardPhoto}
+            />
+          )}
           <View style={styles.requestCardMeta}>
             <View style={styles.requestMetaItem}>
               <Ionicons name="person-outline" size={12} color="#94a3b8" />
@@ -825,22 +975,120 @@ export default function HomeScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          {selectedRequest.status === "pending" && (
-            <LinearGradient
-              colors={["#3b5fca", "#5b7ee5"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.volunteerBtn}
-            >
-              <TouchableOpacity
-                style={styles.volunteerBtnInner}
-                onPress={() => navigation.navigate("Requests")}
-              >
-                <Ionicons name="hand-left" size={18} color="#fff" />
-                <Text style={styles.volunteerBtnText}>Saya Mau Bantu!</Text>
-              </TouchableOpacity>
-            </LinearGradient>
-          )}
+          {(() => {
+            const isOwn = selectedRequest.userId === currentUser?._id;
+            const isVolunteered =
+              volunteeredIds.has(selectedRequest._id) ||
+              (currentUser?._id &&
+                selectedRequest.volunteerIds?.includes(currentUser._id));
+            const isCompletedByMe = completedActivityIds.has(selectedRequest._id);
+            const busy = volunteerLoading || activityLoading;
+
+            if (selectedRequest.status === "completed") {
+              return (
+                <View style={styles.requestDoneBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                  <Text style={styles.requestDoneText}>Request sudah selesai</Text>
+                </View>
+              );
+            }
+
+            if (isOwn) {
+              return (
+                <View style={styles.requestDoneBadge}>
+                  <Ionicons name="person-circle-outline" size={18} color="#3b5fca" />
+                  <Text style={[styles.requestDoneText, { color: "#3b5fca" }]}>
+                    Ini request kamu
+                  </Text>
+                </View>
+              );
+            }
+
+            if (isCompletedByMe) {
+              return (
+                <View style={styles.requestDoneBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                  <Text style={styles.requestDoneText}>
+                    Terima kasih telah membantu
+                  </Text>
+                </View>
+              );
+            }
+
+            if (!isVolunteered) {
+              return (
+                <LinearGradient
+                  colors={["#3b5fca", "#5b7ee5"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.volunteerBtn}
+                >
+                  <TouchableOpacity
+                    style={styles.volunteerBtnInner}
+                    onPress={() =>
+                      confirm(
+                        "Konfirmasi",
+                        "Apakah kamu yakin ingin membantu request ini?",
+                        () =>
+                          volunteerForRequest({
+                            variables: { requestId: selectedRequest._id },
+                          }),
+                      )
+                    }
+                    disabled={busy}
+                  >
+                    {volunteerLoading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="hand-left" size={18} color="#fff" />
+                        <Text style={styles.volunteerBtnText}>Saya Mau Bantu!</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </LinearGradient>
+              );
+            }
+
+            return (
+              <View style={styles.mapActionRow}>
+                <TouchableOpacity
+                  style={styles.mapCompleteBtn}
+                  onPress={() =>
+                    confirm(
+                      "Selesai Membantu",
+                      "Tandai partisipasimu sebagai selesai?",
+                      handleCompleteVolunteer,
+                    )
+                  }
+                  disabled={busy}
+                >
+                  {activityLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                      <Text style={styles.mapCompleteBtnText}>Selesai</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.mapCancelBtn}
+                  onPress={() =>
+                    confirm(
+                      "Batalkan Partisipasi",
+                      "Apakah kamu yakin ingin membatalkan partisipasimu?",
+                      handleCancelVolunteer,
+                    )
+                  }
+                  disabled={busy}
+                >
+                  <Ionicons name="close-circle-outline" size={16} color="#ef4444" />
+                  <Text style={styles.mapCancelBtnText}>Batalkan</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
         </Animated.View>
       )}
 
@@ -920,6 +1168,35 @@ export default function HomeScreen({ navigation }) {
             </BlurView>
           </TouchableOpacity>
         </View>
+      </Modal>
+
+      <Modal visible={confirmModal.visible} transparent animationType="fade">
+        <Pressable
+          style={styles.confirmOverlay}
+          onPress={() => setConfirmModal({ ...confirmModal, visible: false })}
+        >
+          <Pressable style={styles.confirmCard} onPress={() => {}}>
+            <Text style={styles.confirmTitle}>{confirmModal.title}</Text>
+            <Text style={styles.confirmMessage}>{confirmModal.message}</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmBtnCancel}
+                onPress={() => setConfirmModal({ ...confirmModal, visible: false })}
+              >
+                <Text style={styles.confirmBtnCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtnOk}
+                onPress={() => {
+                  setConfirmModal({ ...confirmModal, visible: false });
+                  confirmModal.onConfirm?.();
+                }}
+              >
+                <Text style={styles.confirmBtnOkText}>Ya</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -1137,6 +1414,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 12,
   },
+  requestCardPhoto: {
+    width: "100%",
+    height: 140,
+    borderRadius: 14,
+    marginBottom: 12,
+    backgroundColor: "#f1f5f9",
+  },
   requestCardMeta: { flexDirection: "row", gap: 12, marginBottom: 14 },
   requestMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   requestMetaText: { fontSize: 12, color: "#94a3b8" },
@@ -1149,6 +1433,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   volunteerBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  mapActionRow: { flexDirection: "row", gap: 10 },
+  mapCompleteBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#22c55e",
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  mapCompleteBtnText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  mapCancelBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#fef2f2",
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  mapCancelBtnText: { color: "#ef4444", fontWeight: "800", fontSize: 14 },
+  requestDoneBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 14,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  requestDoneText: { color: "#22c55e", fontWeight: "800", fontSize: 14 },
 
   // Fullscreen Modal
   fullScreenContainer: { flex: 1 },
@@ -1312,4 +1633,50 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "rgba(255,255,255,0.9)",
   },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+    zIndex: 50,
+  },
+  confirmCard: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+  },
+  confirmTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 8,
+  },
+  confirmMessage: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  confirmActions: { flexDirection: "row", gap: 10, width: "100%" },
+  confirmBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+  },
+  confirmBtnCancelText: { fontSize: 14, fontWeight: "700", color: "#64748b" },
+  confirmBtnOk: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#3b5fca",
+    alignItems: "center",
+  },
+  confirmBtnOkText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

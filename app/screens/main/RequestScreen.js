@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -43,6 +44,7 @@ const GET_ALL_REQUESTS = gql`
       userId
       userName
       createdAt
+      photos
       volunteerIds
       location {
         type
@@ -534,26 +536,33 @@ export default function RequestsScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View
-                style={[
-                  styles.modalCategoryBadge,
-                  {
-                    backgroundColor:
-                      (CATEGORY_COLORS[selectedRequest?.category] ||
-                        "#3b5fca") + "20",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={
-                    CATEGORY_ICONS[selectedRequest?.category] || "help-circle"
-                  }
-                  size={32}
-                  color={
-                    CATEGORY_COLORS[selectedRequest?.category] || "#3b5fca"
-                  }
+              {selectedRequest?.photos?.[0] ? (
+                <Image
+                  source={{ uri: selectedRequest.photos[0] }}
+                  style={styles.modalRequestPhoto}
                 />
-              </View>
+              ) : (
+                <View
+                  style={[
+                    styles.modalCategoryBadge,
+                    {
+                      backgroundColor:
+                        (CATEGORY_COLORS[selectedRequest?.category] ||
+                          "#3b5fca") + "20",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      CATEGORY_ICONS[selectedRequest?.category] || "help-circle"
+                    }
+                    size={32}
+                    color={
+                      CATEGORY_COLORS[selectedRequest?.category] || "#3b5fca"
+                    }
+                  />
+                </View>
+              )}
 
               <Text style={styles.modalDesc}>
                 {selectedRequest?.description}
@@ -1091,6 +1100,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
     marginBottom: 16,
+  },
+  modalRequestPhoto: {
+    width: "100%",
+    height: 180,
+    borderRadius: 16,
+    marginBottom: 16,
+    backgroundColor: "#f1f5f9",
   },
   modalDesc: {
     fontSize: 15,
