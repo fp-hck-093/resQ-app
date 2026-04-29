@@ -295,11 +295,6 @@ export class RequestsService {
 
     if (hasLocation) {
       let baseQuery = this.requestModel.orderBy(sortBy ?? 'createdAt', order);
-      if (search)
-        baseQuery = baseQuery.where('userName', {
-          $regex: search,
-          $options: 'i',
-        });
       if (category) baseQuery = baseQuery.where('category', category);
       if (status) {
         baseQuery = baseQuery.where('status', status);
@@ -307,14 +302,15 @@ export class RequestsService {
         baseQuery = baseQuery.where('status', { $ne: 'completed' });
       }
 
-    // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
-    if (search) {
-      const term = search.toLowerCase();
-      all = all.filter((r) => r.userName?.toLowerCase().includes(term));
-    }
+      let all = (await baseQuery.get()) as unknown as Request[];
 
-    // Apply location filter in JS
-    if (hasLocation) {
+      // Apply search in JS — Mongoloquent wraps $regex in $eq which breaks it
+      if (search) {
+        const term = search.toLowerCase();
+        all = all.filter((r) => r.userName?.toLowerCase().includes(term));
+      }
+
+      // Apply location filter in JS
       all = all.filter((r) => {
         const coords = r.location?.coordinates as unknown as
           | number[]
@@ -326,6 +322,8 @@ export class RequestsService {
           NEARBY_REQUESTS_RADIUS_KM
         );
       });
+
+      return all;
     }
 
     const hasFilters = !!(search || category || status);
