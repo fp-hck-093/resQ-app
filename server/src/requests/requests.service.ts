@@ -223,7 +223,7 @@ export class RequestsService {
 
     const levelWeight: Record<string, number> = {
       extreme: 2,
-      high: 1,
+      severe: 1,
       moderate: 0.5,
     };
     const maxBonus = dangerZones.reduce(
