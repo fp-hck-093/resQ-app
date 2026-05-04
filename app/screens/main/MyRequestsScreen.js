@@ -106,7 +106,10 @@ export default function MyRequestsScreen({ navigation }) {
     const busy = completeLoading || deleteLoading;
 
     return (
-      <TouchableOpacity style={styles.card} onPress={() => setSelectedRequest(item)}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => setSelectedRequest(item)}
+      >
         <View style={styles.cardInner}>
           <View style={[styles.cardIcon, { backgroundColor: catConfig.bg }]}>
             <Ionicons name={catConfig.icon} size={22} color={catConfig.color} />
@@ -117,8 +120,15 @@ export default function MyRequestsScreen({ navigation }) {
               {item.description}
             </Text>
           </View>
-          <View style={[styles.statusPill, { backgroundColor: statusConfig.bg }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
+          <View
+            style={[styles.statusPill, { backgroundColor: statusConfig.bg }]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: statusConfig.color },
+              ]}
+            />
             <Text style={[styles.statusText, { color: statusConfig.color }]}>
               {statusConfig.label}
             </Text>
@@ -146,8 +156,10 @@ export default function MyRequestsScreen({ navigation }) {
                   setConfirmModal({
                     visible: true,
                     title: "Selesaikan Request",
-                    message: "Apakah bantuan sudah diterima dan request ini selesai?",
-                    onConfirm: () => completeRequest({ variables: { id: item._id } }),
+                    message:
+                      "Apakah bantuan sudah diterima dan request ini selesai?",
+                    onConfirm: () =>
+                      completeRequest({ variables: { id: item._id } }),
                   })
                 }
               >
@@ -164,7 +176,8 @@ export default function MyRequestsScreen({ navigation }) {
                     visible: true,
                     title: "Batalkan Request",
                     message: "Apakah kamu yakin ingin membatalkan request ini?",
-                    onConfirm: () => deleteRequest({ variables: { id: item._id } }),
+                    onConfirm: () =>
+                      deleteRequest({ variables: { id: item._id } }),
                   })
                 }
               >
@@ -181,7 +194,10 @@ export default function MyRequestsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
           <Ionicons name="chevron-back" size={24} color="#0f172a" />
         </TouchableOpacity>
         <View>
@@ -215,7 +231,11 @@ export default function MyRequestsScreen({ navigation }) {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconWrap}>
-                <Ionicons name="alert-circle-outline" size={48} color="#3b5fca" />
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={48}
+                  color="#3b5fca"
+                />
               </View>
               <Text style={styles.emptyTitle}>Belum Ada Request</Text>
               <Text style={styles.emptyDesc}>
@@ -228,11 +248,15 @@ export default function MyRequestsScreen({ navigation }) {
 
       <Modal visible={!!selectedRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}>
+          <View
+            style={[styles.modalContent, { paddingBottom: bottomSafe + 20 }]}
+          >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>{selectedRequest?.category}</Text>
+                <Text style={styles.modalTitle}>
+                  {selectedRequest?.category}
+                </Text>
                 <Text style={styles.modalSubtitle}>Request Saya</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedRequest(null)}>
@@ -252,18 +276,27 @@ export default function MyRequestsScreen({ navigation }) {
                     styles.modalCategoryBadge,
                     {
                       backgroundColor:
-                        (CATEGORY_CONFIG[selectedRequest?.category]?.color || "#3b5fca") + "20",
+                        (CATEGORY_CONFIG[selectedRequest?.category]?.color ||
+                          "#3b5fca") + "20",
                     },
                   ]}
                 >
                   <Ionicons
-                    name={CATEGORY_CONFIG[selectedRequest?.category]?.icon || "help-circle"}
+                    name={
+                      CATEGORY_CONFIG[selectedRequest?.category]?.icon ||
+                      "help-circle"
+                    }
                     size={32}
-                    color={CATEGORY_CONFIG[selectedRequest?.category]?.color || "#3b5fca"}
+                    color={
+                      CATEGORY_CONFIG[selectedRequest?.category]?.color ||
+                      "#3b5fca"
+                    }
                   />
                 </View>
               )}
-              <Text style={styles.modalDesc}>{selectedRequest?.description}</Text>
+              <Text style={styles.modalDesc}>
+                {selectedRequest?.description}
+              </Text>
               <View style={styles.modalInfoRow}>
                 <Ionicons name="people-outline" size={16} color="#64748b" />
                 <Text style={styles.modalInfoText}>
@@ -303,9 +336,12 @@ export default function MyRequestsScreen({ navigation }) {
                       setConfirmModal({
                         visible: true,
                         title: "Selesaikan Request",
-                        message: "Apakah bantuan sudah diterima dan request ini selesai?",
+                        message:
+                          "Apakah bantuan sudah diterima dan request ini selesai?",
                         onConfirm: () =>
-                          completeRequest({ variables: { id: selectedRequest._id } }),
+                          completeRequest({
+                            variables: { id: selectedRequest._id },
+                          }),
                       })
                     }
                   >
@@ -313,8 +349,14 @@ export default function MyRequestsScreen({ navigation }) {
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <>
-                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                        <Text style={styles.completeBtnText}>Request Selesai</Text>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color="#fff"
+                        />
+                        <Text style={styles.completeBtnText}>
+                          Request Selesai
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -327,9 +369,12 @@ export default function MyRequestsScreen({ navigation }) {
                       setConfirmModal({
                         visible: true,
                         title: "Batalkan Request",
-                        message: "Apakah kamu yakin ingin membatalkan request ini?",
+                        message:
+                          "Apakah kamu yakin ingin membatalkan request ini?",
                         onConfirm: () =>
-                          deleteRequest({ variables: { id: selectedRequest._id } }),
+                          deleteRequest({
+                            variables: { id: selectedRequest._id },
+                          }),
                       })
                     }
                   >
@@ -337,8 +382,14 @@ export default function MyRequestsScreen({ navigation }) {
                       <ActivityIndicator color="#ef4444" size="small" />
                     ) : (
                       <>
-                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                        <Text style={styles.cancelBtnText}>Batalkan Request</Text>
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color="#ef4444"
+                        />
+                        <Text style={styles.cancelBtnText}>
+                          Batalkan Request
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -360,7 +411,9 @@ export default function MyRequestsScreen({ navigation }) {
             <View style={styles.confirmActions}>
               <TouchableOpacity
                 style={styles.confirmBtnCancel}
-                onPress={() => setConfirmModal({ ...confirmModal, visible: false })}
+                onPress={() =>
+                  setConfirmModal({ ...confirmModal, visible: false })
+                }
               >
                 <Text style={styles.confirmBtnCancelText}>Batal</Text>
               </TouchableOpacity>
@@ -405,7 +458,12 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#0f172a" },
   headerSubtitle: { fontSize: 12, color: "#94a3b8", marginTop: 2 },
 
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
   loadingText: { color: "#64748b", fontSize: 14 },
 
   listContent: { padding: 16, gap: 12 },
@@ -501,8 +559,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
   },
-  emptyTitle: { fontSize: 18, fontWeight: "800", color: "#0f172a", textAlign: "center" },
-  emptyDesc: { fontSize: 13, color: "#94a3b8", textAlign: "center", lineHeight: 20 },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0f172a",
+    textAlign: "center",
+  },
+  emptyDesc: {
+    fontSize: 13,
+    color: "#94a3b8",
+    textAlign: "center",
+    lineHeight: 20,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -609,8 +677,19 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
   },
-  confirmTitle: { fontSize: 17, fontWeight: "800", color: "#0f172a", marginBottom: 8 },
-  confirmMessage: { fontSize: 14, color: "#64748b", textAlign: "center", lineHeight: 20, marginBottom: 24 },
+  confirmTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 8,
+  },
+  confirmMessage: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
   confirmActions: { flexDirection: "row", gap: 10, width: "100%" },
   confirmBtnCancel: {
     flex: 1,
