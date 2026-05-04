@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "ResQ",
+    "slug": "resq",
+    "scheme": "resq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyDedWZ3Ap3t7Z7pxd0BleURAgvMSzwEoqU"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDedWZ3Ap3t7Z7pxd0BleURAgvMSzwEoqU"
+        }
+      },
+      "package": "com.erwindw99.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-notifications",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2d4393d8-bcdd-43b5-8580-b88f5fdca37e"
+      }
+    },
+    "owner": "erwindw99s-organization"
+  }
+}

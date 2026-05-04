@@ -1,0 +1,90 @@
+import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { ObjectId } from 'mongodb';
+import { Model } from 'mongoloquent';
+import { GeoPoint } from '../../common/types/geo-point.type';
+import { User } from '../../users/models/user.model';
+import { ActivityLog } from '../../activity-logs/models/activity-log.model';
+import { VolunteerInfo } from '../dto/volunteer-info.output';
+
+export interface IRequest {
+  _id?: string;
+  userId: ObjectId;
+  userName: string;
+  userPhone: string;
+  category: 'Rescue' | 'Shelter' | 'Food' | 'Medical' | 'Money/Item';
+  description: string;
+  numberOfPeople: number;
+  urgencyScore: number | null;
+  location: {
+    type: string;
+    coordinates: number[];
+  };
+  address: string;
+  photos?: string[];
+  status: 'pending' | 'in_progress' | 'completed';
+  volunteerIds?: ObjectId[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+@ObjectType()
+export class Request extends Model<IRequest> {
+  public static $schema: IRequest;
+  protected $collection: string = 'requests';
+
+  @Field(() => ID)
+  _id: string;
+
+  @Field(() => String)
+  userId: string;
+
+  @Field(() => String)
+  userName: string;
+
+  @Field(() => String)
+  userPhone: string;
+
+  @Field(() => String)
+  category: string;
+
+  @Field(() => String)
+  description: string;
+
+  @Field(() => Number)
+  numberOfPeople: number;
+
+  @Field(() => Number, { nullable: true })
+  urgencyScore: number | null;
+
+  @Field(() => GeoPoint)
+  location: GeoPoint;
+
+  @Field(() => String)
+  address: string;
+
+  @Field(() => [String], { nullable: true })
+  photos?: string[];
+
+  @Field(() => String)
+  status: string;
+
+  @Field(() => [String], { nullable: true })
+  volunteerIds?: string[];
+
+  @Field(() => [VolunteerInfo], { nullable: true })
+  volunteers?: VolunteerInfo[];
+
+  @Field(() => Date)
+  createdAt: Date;
+
+  @Field(() => Date)
+  updatedAt: Date;
+
+  user() {
+    return this.belongsTo(User, 'userId');
+  }
+
+  activityLogs() {
+    return this.hasMany(ActivityLog, 'requestId');
+  }
+}
